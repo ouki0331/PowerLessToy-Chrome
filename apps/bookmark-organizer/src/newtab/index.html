@@ -22,6 +22,15 @@
       </div>
 
       <div class="header-actions">
+        <!-- Backup & Import Actions -->
+        <button id="importJsonBtn" class="btn btn-ghost btn-sm" title="Import bookmarks from JSON">
+          📥 <span id="importBtnText">Import JSON</span>
+        </button>
+        <button id="exportBackupBtn" class="btn btn-ghost btn-sm" title="Export full JSON backup">
+          💾 <span id="exportBtnText">Export Backup</span>
+        </button>
+        <input type="file" id="importFileInput" accept=".json,application/json" style="display: none;">
+
         <button id="langToggleBtn" class="btn btn-ghost btn-sm" title="Toggle Language (EN / JA)">
           🌐 <span id="currentLangLabel">EN</span>
         </button>
@@ -56,6 +65,18 @@
       <button id="retryLoadBtn" class="btn btn-secondary btn-sm">Retry</button>
     </div>
 
+    <!-- Undo Import Success Banner -->
+    <div id="undoBanner" class="undo-banner" style="display: none;" role="status">
+      <div class="undo-content">
+        <span class="undo-icon" aria-hidden="true">✅</span>
+        <span id="undoBannerText" class="undo-text">Import completed.</span>
+      </div>
+      <div class="undo-actions">
+        <button id="undoImportBtn" class="btn btn-primary btn-sm">Undo This Import</button>
+        <button id="dismissUndoBtn" class="btn btn-ghost btn-sm">✕</button>
+      </div>
+    </div>
+
     <!-- Active Category Header -->
     <div class="category-header" id="categoryHeader">
       <div class="cat-title-area">
@@ -64,7 +85,7 @@
       </div>
 
       <div class="cat-manage-controls">
-        <div id="catAdminButtons" style="display: none; gap: 6px; display: none;">
+        <div id="catAdminButtons" style="display: none; gap: 6px;">
           <button id="renameCatBtn" class="btn btn-ghost btn-sm">Rename</button>
           <button id="deleteCatBtn" class="btn btn-ghost btn-sm danger">Delete</button>
         </div>

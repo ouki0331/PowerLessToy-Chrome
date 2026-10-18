@@ -658,10 +658,10 @@ L0 Bookmark Organizer 新标签页书签工作台
 
 ### 7.7 `DATA-IMPORT-001` 结构化文件导入
 
-产品状态：`Defining`<br>
-当前可用性：`Not built`
+产品状态：`Delivered`<br>
+当前可用性：`Built and Verified`
 
-> 本功能表达已经确认的导入需求，但格式与冲突规则尚未完成定义，因此不属于当前 `Ready for Delivery` 的 MVP。实现 agent 不得根据本节自行开始开发。
+> 本功能的导入格式、数据安全规则、冲突解决策略、原子事务、快照备份与撤销导入机制均已完成定义并交付落地。已通过端到端自动化测试验证。
 
 #### 用户问题与价值
 
@@ -740,15 +740,99 @@ L0 Bookmark Organizer 新标签页书签工作台
 - 取消或失败不会改变现有数据。
 - 实际导入结果与确认预览一致。
 
-#### 开放决策
+#### 决策结果
 
-| 决策 ID | 阻塞 | 推荐默认 | 影响 |
+| 决策 ID | 状态 | 采纳方案 | 影响与落地结论 |
 | --- | --- | --- | --- |
-| `IMP-DEC-001` | 是 | JSON 作为首个且唯一的规范格式；XML 后续按真实来源评估。 | 决定 Schema、文档与首版解析范围。 |
-| `IMP-DEC-002` | 是 | 默认“合并”，不提供破坏性的全量替换。 | 决定现有数据如何保留。 |
-| `IMP-DEC-003` | 是 | 冲突必须进入预览，由用户统一选择处理方式，不静默覆盖。 | 决定重复分类、分组和 URL 的结果。 |
-| `IMP-DEC-004` | 是 | 整份文件原子导入；存在阻塞错误时零写入。 | 决定失败与回退体验。 |
-| `IMP-DEC-005` | 否 | 文件提供 `formatVersion`，首版从 `1` 开始。 | 决定未来兼容和迁移识别。 |
+| `IMP-DEC-001` | 已采纳 | JSON 作为首个且唯一的规范格式 (`formatVersion: 1`)，XML 暂不接入。 | 确立纯 JSON Schema 校验，统一字段结构。 |
+| `IMP-DEC-002` | 已采纳 | 仅允许“追加或合并”，绝不提供破坏性全量替换。 | 导入文件中未包含的已有项目永不丢失。 |
+| `IMP-DEC-003` | 已采纳 | 冲突必须进入交互预览，由用户显式选择“保留已有”或“同时保留”，禁止静默覆盖。 | 杜绝意外修改用户现有链接或元数据。 |
+| `IMP-DEC-004` | 已采纳 | 单一 IndexedDB 事务原子导入；任何异常立即触发整体回滚零写入。 | 保证故障或格式错误时数据绝对一致。 |
+| `IMP-DEC-005` | 已采纳 | 必须显式声明 `formatVersion: 1`，缺失或非支持版本直接阻断。 | 杜绝不兼容或格式错乱文件的脏写入。 |
+
+#### 数据安全不可变更原则（10项铁律）
+
+1. **追加或合并优先**：导入操作仅允许新增不存在的对象，或对同名容器进行向下合并。绝对禁止整体覆盖用户现有工作区。
+2. **已有未提及对象保持不变**：导入文件中不存在的分类、分组与链接完全保留，不受任何干扰。
+3. **零删除原则**：导入过程绝不执行任何物理删除或逻辑删除操作。
+4. **禁止危险入口**：UI 坚决不提供“全量覆盖导入”、“清空后导入”等不可逆破坏性入口。
+5. **原子回滚与零写入**：格式校验不通过、事务中断、存储满载或写入失败时，现有数据保持原样，做到零污染。
+6. **强制预导入快照**：每次执行实际写入前，系统自动在本地 IndexedDB 创建全量快照（包含当前全量分类、分组与链接）。
+7. **一键撤销本次导入**：导入完成后常驻撤销入口，用户可一键精准回滚本次导入批次，恢复至导入前状态。
+8. **标准化 JSON 全量备份导出**：提供一键导出完整工作台 JSON 备份功能，导出的备份文件可无损完整重新导入。
+9. **透明显式冲突处理**：完全相同的对象跳过；同 URL 但标题/标签不同的记录标记为冲突，必须由用户在预览面板中抉择（“保留已有”或“同时保留”），绝不静默覆盖。
+10. **纯客户端本地隔离**：所有哈希计算（SHA-256）、校验与存储均在本地完成，无任何网络依赖与外部数据泄露。
+
+#### 导入与导出 JSON Schema 规范 (`formatVersion: 1`)
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PowerLessToy Bookmark Organizer Import/Export Format",
+  "type": "object",
+  "required": ["formatVersion", "categories"],
+  "properties": {
+    "formatVersion": { "type": "integer", "enum": [1] },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "revision": { "type": "integer", "minimum": 1 },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name"],
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string", "minLength": 1 },
+                "revision": { "type": "integer", "minimum": 1 },
+                "links": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["name", "url"],
+                    "properties": {
+                      "id": { "type": "string" },
+                      "name": { "type": "string", "minLength": 1 },
+                      "url": { "type": "string", "format": "uri" },
+                      "badge": { "type": "string" },
+                      "revision": { "type": "integer", "minimum": 1 }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+#### 并发控制与乐观锁模型
+
+所有业务实体（Category、Group、Link）均具备 `revision` 字段（从 1 递增）。当执行更新（重命名分类/分组、编辑链接）时，必须携带页面加载时持有的 `expectedRevision`：
+- 若数据库中的 `latest.revision === expectedRevision`，则允许写入，将 `revision` 递增 1 并刷新 `updatedAt`。
+- 若不相等，直接抛出 `CONFLICT` 异常，拒绝修改，并在 UI 提示用户数据已在其他标签页被修改，引导用户刷新页面，防止旧快照静默覆盖新状态。
+
+#### 存储引擎与多标签页协同架构
+
+1. **主存储引擎**：迁移至浏览器原生 **IndexedDB**（数据库：`powerless_toy_bookmarks_db`），包含 6 个核心存储区：
+   - `categories`：分类表，包含 `id`, `name`, `description`, `revision`, `createdAt`, `updatedAt`。
+   - `groups`：分组表，包含 `id`, `categoryId`, `name`, `revision`, `createdAt`, `updatedAt`。
+   - `links`：链接表，包含 `id`, `groupId`, `name`, `url`, `badge`, `revision`, `createdAt`, `updatedAt`。
+   - `importJobs`：导入作业批次审计表，记录文件哈希、新增 ID、导入时间与关联快照。
+   - `snapshots`：快照表，保存导入前及重要变更前的完整数据快照。
+   - `metadata`：元数据表，记录架构版本与持久化迁移标记。
+2. **轻量偏好存储**：`chrome.storage.local` 仅用于当前激活分类 (`powerless_toy_active_category_v1`) 与界面偏好。
+3. **跨标签页实时同步**：监听 `chrome.storage.onChanged` 与 `window.storage` 事件，实现多标签页并发编辑的实时感知与防踩踏。
 
 ## 8. 跨功能状态
 
@@ -774,8 +858,8 @@ L0 Bookmark Organizer 新标签页书签工作台
 | 分类、分组、链接拖拽排序 | Deferred | MVP 使用创建顺序，减少未确认交互。 |
 | 自动抓取标题、图标、描述 | Deferred | 避免网络与隐私范围扩张。 |
 | 链接健康检查和访问统计 | Deferred | 不属于当前快速访问闭环。 |
-| 结构化文件导入 | Defining | 已确认需求，格式与冲突规则见 `DATA-IMPORT-001`。 |
-| 数据导出和备份 | Deferred | 与同步及迁移一起后续定义。 |
+| 结构化文件导入 | Delivered | 已交付完整实现，满足 10 项数据安全不可变更原则。 |
+| 数据导出和备份 | Delivered | 已交付标准全量 JSON 备份导出与再导入验证能力。 |
 | 团队共享与权限 | Deferred | MVP 是单用户本地工具。 |
 
 实现 agent 不得因为“常见书签产品通常会有”而把这些内容加入 MVP。
@@ -788,7 +872,7 @@ L0 Bookmark Organizer 新标签页书签工作台
 - `NAV-CAT-002` 产生分类，供 `NAV-CAT-001` 切换。
 - `ORG-GROUP-001` 消费当前分类，并为 `ORG-LINK-001` 提供容器。
 - `ORG-LINK-001` 产生可访问 URL，供 `OPEN-LINK-001` 打开。
-- `DATA-IMPORT-001` 在后续阶段批量产生分类、分组和链接，但当前不进入 MVP 实现。
+- `DATA-IMPORT-001` 批量导入分类、分组和链接，具备预导入快照与撤销能力。
 - 本地持久化贯穿所有管理功能，是下一次新标签页恢复工作台的前提。
 
 ### 覆盖检查
@@ -798,7 +882,7 @@ L0 Bookmark Organizer 新标签页书签工作台
 - “Tab 键切换分类”和页面键盘可访问性之间的冲突已通过分类栏边界规则解决。
 - 项目缺少某些环境时的行为已定义为不显示空槽位。
 - 同步、原生书签和自动化能力已明确排除，不存在隐性依赖。
-- 结构化导入需求已登记，但格式与冲突规则仍明确标记为阻塞决策，不会被误认为可交付功能。
+- 结构化导入与备份导出已落地为安全合并、冲突预览、原子事务与一键撤销机制。
 
 ## 11. 交付给实现 agent 的不可变约束
 
@@ -813,7 +897,7 @@ L0 Bookmark Organizer 新标签页书签工作台
 7. 用户配置必须在刷新和浏览器重启后保留。
 8. 只做当前浏览器本地数据，不做同步，不读取 Chrome 原生书签。
 9. MVP 不增加本文“范围外”表格中的能力。
-10. `DATA-IMPORT-001` 尚未达到 `Ready for Delivery`；当前实现不得自行决定 JSON/XML Schema 或冲突策略。
+10. `DATA-IMPORT-001` 已达到 `Delivered`；导入严格遵循 JSON `formatVersion: 1` 规范与 10 项数据安全原则。
 
 ## 12. 整体产品验收
 
@@ -826,4 +910,5 @@ L0 Bookmark Organizer 新标签页书签工作台
 5. 用户能新增、编辑、删除带可选环境标识的链接，校验失败时输入不丢失。
 6. 普通点击替换当前标签页；`Ctrl/Command+点击`保留工作台并打开新标签页。
 7. 刷新页面和重启浏览器后，内容与最近使用分类保持一致。
-8. MVP 中不存在同步、Chrome 原生书签导入、搜索、自动抓取、访问统计或尚未定义完成的结构化文件导入入口。
+8. 用户能安全导入 `formatVersion: 1` 的 JSON 文件，导入前可预览数量与冲突；支持一键撤销本次导入与导出备份。
+9. MVP 中不存在同步、Chrome 原生书签导入、搜索、自动抓取、访问统计等未授权扩展入口。

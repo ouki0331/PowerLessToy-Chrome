@@ -193,7 +193,10 @@ describe("Bookmark Organizer - Storage & Concurrency Logic", () => {
     await assert.rejects(async () => {
       await loadWorkbenchData();
     }, (err) => {
-      assert.equal(err.code, "CORRUPTED_STORAGE");
+      assert.ok(
+        err.code === "CORRUPTED_STORAGE" || err.code === "CORRUPTED_LEGACY_DATA",
+        `Expected corruption error code, got ${err.code}`
+      );
       return true;
     });
 

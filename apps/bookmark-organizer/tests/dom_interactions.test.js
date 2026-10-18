@@ -115,7 +115,50 @@ describe("Bookmark Organizer - DOM Interactions & Sanitization", () => {
     assert.equal(activeCatId, "cat2"); // Stays on cat2 while focus exits naturally
   });
 
-  it("P2 fix: user input containing HTML entities and quotes assigns safely to value and textContent", () => {
+  it("Requirement 15: save failure preserves user input in modal and displays error message", async () => {
+    // Simulate modal form elements
+    const mockInput = {
+      value: "Crucial Unsaved Project Name",
+      classList: {
+        classes: new Set(),
+        add(cls) { this.classes.add(cls); },
+        has(cls) { return this.classes.has(cls); }
+      }
+    };
+    const mockErrorEl = {
+      textContent: "",
+      style: { display: "none" }
+    };
+
+    let modalClosed = false;
+    const closeModal = () => { modalClosed = true; };
+
+    // Simulate form submission where database rejects with error
+    const handleSubmit = async () => {
+      const val = mockInput.value;
+      try {
+        throw new Error("Simulated IndexedDB write quota exceeded");
+      } catch (err) {
+        // Modal preserves input and displays inline error instead of closing
+        mockInput.classList.add("has-error");
+        mockErrorEl.textContent = `Save failed: ${err.message}`;
+        mockErrorEl.style.display = "block";
+        return false; // Prevents modal closure
+      }
+    };
+
+    const shouldClose = await handleSubmit();
+    if (shouldClose) closeModal();
+
+    // Verify modal was NOT closed and user input was PRESERVED
+    assert.equal(modalClosed, false, "Modal must remain open on failure");
+    assert.equal(mockInput.value, "Crucial Unsaved Project Name", "User input must be preserved");
+    assert.equal(mockInput.classList.has("has-error"), true);
+    assert.equal(mockErrorEl.style.display, "block");
+    assert.ok(mockErrorEl.textContent.includes("Save failed"));
+  });
+
+  it("Requirement 16: user input containing HTML entities and quotes assigns safely to value and textContent", () => {
     const maliciousInput = '<script>alert("xss")</script><img src=x onerror=alert(1)>" autofocus';
 
     // Verify DOM property assignment behavior

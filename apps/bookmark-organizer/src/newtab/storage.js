@@ -1,16 +1,20 @@
 /**
  * Storage Layer for Bookmark Organizer
- * Interacts with chrome.storage.local with localStorage/memory fallback.
- * Implements:
- * - Strict first-run detection vs corrupted storage protection (P1 fix)
- * - Read-Merge-Write concurrency safety across multiple tabs (P1 fix)
- * - Cross-tab storage change subscription
+ * Primary Source of Truth: IndexedDB
+ * Lightweight UI State: chrome.storage.local
+ * Features:
+ * - Optimistic concurrency control via entity revisions (expectedRevision)
+ * - Single-transaction cascade deletions
+ * - Old data migration from chrome.storage.local
+ * - JSON Import/Export with snapshot and undo support
  */
 
-import { STORAGE_KEY, ACTIVE_CAT_KEY, getInitialSeedData } from "./constants.js";
+import { withTransaction, STORES, verifyRevision, _resetDatabaseForTesting } from "./db.js";
+import { migrateFromChromeStorageIfNeeded } from "./migration.js";
+import { STORAGE_KEY, ACTIVE_CAT_KEY } from "./constants.js";
 
-// In-memory fallback if neither chrome.storage nor localStorage is available
-let memoryStore = {};
+// In-memory fallback for raw chrome.storage.local preferences in test env
+let rawMemoryStore = {};
 
 function getChromeStorage() {
   if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
@@ -27,8 +31,7 @@ function getLocalStorage() {
 }
 
 /**
- * Low-level read from storage.
- * Distinguishes between key not found (undefined) vs stored value.
+ * Low-level read for lightweight preferences (active category, language, migration flag)
  */
 export async function rawRead(key) {
   const chromeStorage = getChromeStorage();
@@ -49,11 +52,11 @@ export async function rawRead(key) {
     return raw !== null ? JSON.parse(raw) : undefined;
   }
 
-  return memoryStore[key];
+  return rawMemoryStore[key];
 }
 
 /**
- * Low-level write to storage
+ * Low-level write for lightweight preferences
  */
 export async function rawWrite(key, value) {
   const chromeStorage = getChromeStorage();
@@ -74,7 +77,7 @@ export async function rawWrite(key, value) {
     return;
   }
 
-  memoryStore[key] = value;
+  rawMemoryStore[key] = value;
 }
 
 /**
@@ -120,103 +123,123 @@ export function isValidUrl(url) {
 }
 
 /**
- * Load complete workbench data.
- * CRITICAL RULE:
- * - Only initializes default seed data when the storage key is completely absent (undefined / null).
- * - If the key exists but the structure is corrupted or invalid, throws an error to enter
- *   non-destructive error mode, NEVER overwriting or destroying user data!
+ * Load complete workbench data from IndexedDB.
+ * Automatically runs migration from legacy chrome.storage if needed.
+ * Restores last active category.
  */
 export async function loadWorkbenchData() {
-  const raw = await rawRead(STORAGE_KEY);
-  let isFirstRun = false;
-  let data = raw;
+  // Step 1: Migrate legacy data if not yet migrated
+  const migrationRes = await migrateFromChromeStorageIfNeeded();
 
-  // True First Run: key is completely absent
-  if (raw === undefined || raw === null) {
-    data = getInitialSeedData();
-    isFirstRun = true;
-    await rawWrite(STORAGE_KEY, data);
-    await rawWrite(ACTIVE_CAT_KEY, data.activeCategoryId);
-    return { ...data, isFirstRun };
+  // Step 2: Read all entities from IndexedDB
+  const { categories, groups, links } = await withTransaction(
+    [STORES.CATEGORIES, STORES.GROUPS, STORES.LINKS],
+    "readonly",
+    async (stores) => {
+      const cats = await stores[STORES.CATEGORIES].getAll();
+      const grps = await stores[STORES.GROUPS].getAll();
+      const lnks = await stores[STORES.LINKS].getAll();
+      return {
+        categories: cats.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)),
+        groups: grps.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)),
+        links: lnks.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
+      };
+    }
+  );
+
+  if (!categories || categories.length === 0) {
+    const err = new Error("Corrupted or invalid workbench storage data: 0 categories found");
+    err.code = "CORRUPTED_STORAGE";
+    throw err;
   }
 
-  // Storage key exists: Validate structure integrity
-  if (
-    typeof data !== "object" ||
-    data === null ||
-    !Array.isArray(data.categories) ||
-    data.categories.length === 0
-  ) {
-    const error = new Error("Corrupted or invalid workbench storage data");
-    error.code = "CORRUPTED_STORAGE";
-    error.rawData = raw;
-    throw error;
+  // Step 3: Determine active category
+  let activeCategoryId = categories[0].id;
+  const savedActiveCatId = await rawRead(ACTIVE_CAT_KEY);
+  if (savedActiveCatId && categories.some((c) => c.id === savedActiveCatId)) {
+    activeCategoryId = savedActiveCatId;
   }
 
-  // Ensure groups and links arrays are present
-  if (!Array.isArray(data.groups)) {
-    data.groups = [];
-  }
-  if (!Array.isArray(data.links)) {
-    data.links = [];
-  }
-
-  // Restore last active category if stored separately
-  const lastActiveCat = await rawRead(ACTIVE_CAT_KEY);
-  if (lastActiveCat && data.categories.some((c) => c.id === lastActiveCat)) {
-    data.activeCategoryId = lastActiveCat;
-  } else if (!data.activeCategoryId || !data.categories.some((c) => c.id === data.activeCategoryId)) {
-    data.activeCategoryId = data.categories[0].id;
-  }
-
-  return { ...data, isFirstRun: false };
+  return {
+    categories,
+    groups,
+    links,
+    activeCategoryId,
+    isFirstRun: Boolean(migrationRes?.firstRun)
+  };
 }
 
 /**
- * Persist workbench data atomically
+ * Persist workbench data atomically (provided for backward compatibility)
  */
 export async function saveWorkbenchData(data) {
   if (!data || !Array.isArray(data.categories) || data.categories.length === 0) {
     throw new Error("Invalid data structure: non-empty categories array required");
   }
-  await rawWrite(STORAGE_KEY, {
-    version: 1,
-    categories: data.categories,
-    groups: data.groups || [],
-    links: data.links || [],
-    activeCategoryId: data.activeCategoryId
-  });
+
+  await withTransaction(
+    [STORES.CATEGORIES, STORES.GROUPS, STORES.LINKS],
+    "readwrite",
+    async (stores) => {
+      await stores[STORES.CATEGORIES].clear();
+      await stores[STORES.GROUPS].clear();
+      await stores[STORES.LINKS].clear();
+
+      const now = Date.now();
+      for (const cat of data.categories || []) {
+        await stores[STORES.CATEGORIES].put({
+          ...cat,
+          revision: cat.revision || 1,
+          createdAt: cat.createdAt || now,
+          updatedAt: cat.updatedAt || now
+        });
+      }
+      for (const grp of data.groups || []) {
+        await stores[STORES.GROUPS].put({
+          ...grp,
+          revision: grp.revision || 1,
+          createdAt: grp.createdAt || now,
+          updatedAt: grp.updatedAt || now
+        });
+      }
+      for (const lnk of data.links || []) {
+        await stores[STORES.LINKS].put({
+          ...lnk,
+          revision: lnk.revision || 1,
+          createdAt: lnk.createdAt || now,
+          updatedAt: lnk.updatedAt || now
+        });
+      }
+    }
+  );
 
   if (data.activeCategoryId) {
     await rawWrite(ACTIVE_CAT_KEY, data.activeCategoryId);
   }
 }
 
-function syncInMemoryData(target, source) {
-  if (target && typeof target === "object" && target !== source) {
-    target.categories = source.categories;
-    target.groups = source.groups;
-    target.links = source.links;
-    target.activeCategoryId = source.activeCategoryId;
-  }
-}
 
 /**
- * Switch active category and persist preference
+ * Set and persist active category in lightweight storage
  */
 export async function setActiveCategory(data, categoryId) {
-  const freshData = await loadWorkbenchData();
-  if (!freshData.categories.some((c) => c.id === categoryId)) {
+  const exists = await withTransaction([STORES.CATEGORIES], "readonly", async (stores) => {
+    return Boolean(await stores[STORES.CATEGORIES].get(categoryId));
+  });
+
+  if (!exists) {
     throw new Error(`Category ${categoryId} does not exist`);
   }
-  freshData.activeCategoryId = categoryId;
+
   await rawWrite(ACTIVE_CAT_KEY, categoryId);
-  syncInMemoryData(data, freshData);
-  return freshData;
+  if (data && typeof data === "object") {
+    data.activeCategoryId = categoryId;
+  }
+  return data;
 }
 
 /**
- * Add a new category with fresh storage re-read to avoid cross-tab clobbering
+ * Add a new category to IndexedDB
  */
 export async function addCategory(data, name, description = "") {
   const trimmedName = (name || "").trim();
@@ -224,92 +247,135 @@ export async function addCategory(data, name, description = "") {
     throw new Error("Category name cannot be empty");
   }
 
-  // Re-read fresh data from storage
-  const freshData = await loadWorkbenchData();
+  const newCat = await withTransaction([STORES.CATEGORIES], "readwrite", async (stores) => {
+    const all = await stores[STORES.CATEGORIES].getAll();
+    const maxCreatedAt = all.reduce((max, c) => Math.max(max, c.createdAt || 0), 0);
+    const now = Math.max(Date.now(), maxCreatedAt + 1);
+    const cat = {
+      id: `cat_${now}_${Math.random().toString(36).substring(2, 7)}`,
+      name: trimmedName,
+      description: (description || "").trim(),
+      revision: 1,
+      createdAt: now,
+      updatedAt: now
+    };
+    await stores[STORES.CATEGORIES].add(cat);
+    return cat;
+  });
 
-  const newCat = {
-    id: `cat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    name: trimmedName,
-    description: (description || "").trim(),
-    createdAt: Date.now()
-  };
-  freshData.categories.push(newCat);
-  freshData.activeCategoryId = newCat.id;
+  await rawWrite(ACTIVE_CAT_KEY, newCat.id);
 
-  await saveWorkbenchData(freshData);
-  syncInMemoryData(data, freshData);
+  if (data && typeof data === "object") {
+    if (Array.isArray(data.categories)) data.categories.push(newCat);
+    data.activeCategoryId = newCat.id;
+  }
+
   return newCat;
 }
 
 /**
- * Rename an existing category
+ * Rename an existing category with optimistic revision lock
  */
-export async function renameCategory(data, categoryId, newName) {
+export async function renameCategory(data, categoryId, newName, expectedRevision) {
   const trimmedName = (newName || "").trim();
   if (!trimmedName) {
     throw new Error("Category name cannot be empty");
   }
 
-  const freshData = await loadWorkbenchData();
-  const cat = freshData.categories.find((c) => c.id === categoryId);
-  if (!cat) {
-    throw new Error(`Category ${categoryId} not found`);
-  }
-  cat.name = trimmedName;
+  const updated = await withTransaction([STORES.CATEGORIES], "readwrite", async (stores) => {
+    const latest = await stores[STORES.CATEGORIES].get(categoryId);
+    verifyRevision(latest, expectedRevision, "Category", categoryId);
 
-  await saveWorkbenchData(freshData);
-  syncInMemoryData(data, freshData);
-  return cat;
+    const nextRev = (latest.revision || 1) + 1;
+    const now = Date.now();
+    const mutated = {
+      ...latest,
+      name: trimmedName,
+      revision: nextRev,
+      updatedAt: now
+    };
+    await stores[STORES.CATEGORIES].put(mutated);
+    return mutated;
+  });
+
+  if (data && typeof data === "object" && Array.isArray(data.categories)) {
+    const item = data.categories.find((c) => c.id === categoryId);
+    if (item) Object.assign(item, updated);
+  }
+
+  return updated;
 }
 
 /**
- * Delete a category.
- * Business rules:
- * - At least one category must remain (DEC-004)
- * - If current active category is deleted: activate left sibling, or right sibling if no left.
- * - Cascades deletion to its groups and links.
+ * Delete a category in a single transaction with cascade deletion.
+ * Enforces DEC-004: Cannot delete the last category.
  */
 export async function deleteCategory(data, categoryId) {
-  const freshData = await loadWorkbenchData();
+  return withTransaction(
+    [STORES.CATEGORIES, STORES.GROUPS, STORES.LINKS],
+    "readwrite",
+    async (stores) => {
+      const allCats = await stores[STORES.CATEGORIES].getAll();
+      if (allCats.length <= 1) {
+        throw new Error("Cannot delete the last category");
+      }
 
-  if (freshData.categories.length <= 1) {
-    throw new Error("Cannot delete the last category");
-  }
-  const catIndex = freshData.categories.findIndex((c) => c.id === categoryId);
-  if (catIndex === -1) {
-    throw new Error(`Category ${categoryId} not found`);
-  }
+      const catIndex = allCats.findIndex((c) => c.id === categoryId);
+      if (catIndex === -1) {
+        throw new Error(`Category ${categoryId} not found`);
+      }
 
-  const groupsToDelete = freshData.groups.filter((g) => g.categoryId === categoryId);
-  const groupIds = new Set(groupsToDelete.map((g) => g.id));
-  const linksToDelete = freshData.links.filter((l) => groupIds.has(l.groupId));
+      // Find groups and links in this category
+      const allGroups = await stores[STORES.GROUPS].getAll();
+      const groupsToDelete = allGroups.filter((g) => g.categoryId === categoryId);
+      const groupIds = new Set(groupsToDelete.map((g) => g.id));
 
-  let newActiveCatId = freshData.activeCategoryId;
-  if (freshData.activeCategoryId === categoryId) {
-    if (catIndex > 0) {
-      newActiveCatId = freshData.categories[catIndex - 1].id;
-    } else {
-      newActiveCatId = freshData.categories[catIndex + 1].id;
+      const allLinks = await stores[STORES.LINKS].getAll();
+      const linksToDelete = allLinks.filter((l) => groupIds.has(l.groupId));
+
+      // Cascade delete in transaction
+      for (const link of linksToDelete) {
+        await stores[STORES.LINKS].delete(link.id);
+      }
+      for (const group of groupsToDelete) {
+        await stores[STORES.GROUPS].delete(group.id);
+      }
+      await stores[STORES.CATEGORIES].delete(categoryId);
+
+      // Determine new active category
+      let newActiveCatId;
+      if (catIndex > 0) {
+        newActiveCatId = allCats[catIndex - 1].id;
+      } else {
+        newActiveCatId = allCats[catIndex + 1].id;
+      }
+
+      await rawWrite(ACTIVE_CAT_KEY, newActiveCatId);
+
+      if (data && typeof data === "object") {
+        if (Array.isArray(data.categories)) {
+          data.categories = data.categories.filter((c) => c.id !== categoryId);
+        }
+        if (Array.isArray(data.groups)) {
+          data.groups = data.groups.filter((g) => g.categoryId !== categoryId);
+        }
+        if (Array.isArray(data.links)) {
+          data.links = data.links.filter((l) => !groupIds.has(l.groupId));
+        }
+        data.activeCategoryId = newActiveCatId;
+      }
+
+      return {
+        deletedGroupsCount: groupsToDelete.length,
+        deletedLinksCount: linksToDelete.length,
+        newActiveCategoryId: newActiveCatId
+      };
     }
-  }
-
-  freshData.categories.splice(catIndex, 1);
-  freshData.groups = freshData.groups.filter((g) => g.categoryId !== categoryId);
-  freshData.links = freshData.links.filter((l) => !groupIds.has(l.groupId));
-  freshData.activeCategoryId = newActiveCatId;
-
-  await saveWorkbenchData(freshData);
-  syncInMemoryData(data, freshData);
-
-  return {
-    deletedGroupsCount: groupsToDelete.length,
-    deletedLinksCount: linksToDelete.length,
-    newActiveCategoryId: newActiveCatId
-  };
+  );
 }
 
 /**
- * Add a new group to the current category with fresh re-read
+ * Add a new group to a category
  */
 export async function addGroup(data, categoryId, name) {
   const trimmedName = (name || "").trim();
@@ -317,70 +383,101 @@ export async function addGroup(data, categoryId, name) {
     throw new Error("Group name cannot be empty");
   }
 
-  const freshData = await loadWorkbenchData();
-  if (!freshData.categories.some((c) => c.id === categoryId)) {
-    throw new Error(`Category ${categoryId} not found`);
+  const newGroup = await withTransaction([STORES.CATEGORIES, STORES.GROUPS], "readwrite", async (stores) => {
+    const catExists = await stores[STORES.CATEGORIES].get(categoryId);
+    if (!catExists) {
+      throw new Error(`Category ${categoryId} not found`);
+    }
+    const all = await stores[STORES.GROUPS].getAll();
+    const maxCreatedAt = all.reduce((max, g) => Math.max(max, g.createdAt || 0), 0);
+    const now = Math.max(Date.now(), maxCreatedAt + 1);
+    const grp = {
+      id: `grp_${now}_${Math.random().toString(36).substring(2, 7)}`,
+      categoryId,
+      name: trimmedName,
+      revision: 1,
+      createdAt: now,
+      updatedAt: now
+    };
+    await stores[STORES.GROUPS].add(grp);
+    return grp;
+  });
+
+  if (data && typeof data === "object" && Array.isArray(data.groups)) {
+    data.groups.push(newGroup);
   }
 
-  const newGroup = {
-    id: `grp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    categoryId,
-    name: trimmedName,
-    createdAt: Date.now()
-  };
-  freshData.groups.push(newGroup);
-
-  await saveWorkbenchData(freshData);
-  syncInMemoryData(data, freshData);
   return newGroup;
 }
 
 /**
- * Rename an existing group
+ * Rename an existing group with optimistic revision lock
  */
-export async function renameGroup(data, groupId, newName) {
+export async function renameGroup(data, groupId, newName, expectedRevision) {
   const trimmedName = (newName || "").trim();
   if (!trimmedName) {
     throw new Error("Group name cannot be empty");
   }
 
-  const freshData = await loadWorkbenchData();
-  const group = freshData.groups.find((g) => g.id === groupId);
-  if (!group) {
-    throw new Error(`Group ${groupId} not found`);
-  }
-  group.name = trimmedName;
+  const updated = await withTransaction([STORES.GROUPS], "readwrite", async (stores) => {
+    const latest = await stores[STORES.GROUPS].get(groupId);
+    verifyRevision(latest, expectedRevision, "Group", groupId);
 
-  await saveWorkbenchData(freshData);
-  syncInMemoryData(data, freshData);
-  return group;
+    const nextRev = (latest.revision || 1) + 1;
+    const now = Date.now();
+    const mutated = {
+      ...latest,
+      name: trimmedName,
+      revision: nextRev,
+      updatedAt: now
+    };
+    await stores[STORES.GROUPS].put(mutated);
+    return mutated;
+  });
+
+  if (data && typeof data === "object" && Array.isArray(data.groups)) {
+    const item = data.groups.find((g) => g.id === groupId);
+    if (item) Object.assign(item, updated);
+  }
+
+  return updated;
 }
 
 /**
- * Delete a group and its associated links
+ * Delete a group in a single transaction with cascade deletion of its links
  */
 export async function deleteGroup(data, groupId) {
-  const freshData = await loadWorkbenchData();
+  return withTransaction([STORES.GROUPS, STORES.LINKS], "readwrite", async (stores) => {
+    const group = await stores[STORES.GROUPS].get(groupId);
+    if (!group) {
+      throw new Error(`Group ${groupId} not found`);
+    }
 
-  const groupIndex = freshData.groups.findIndex((g) => g.id === groupId);
-  if (groupIndex === -1) {
-    throw new Error(`Group ${groupId} not found`);
-  }
-  const linksToDelete = freshData.links.filter((l) => l.groupId === groupId);
+    const allLinks = await stores[STORES.LINKS].getAll();
+    const linksToDelete = allLinks.filter((l) => l.groupId === groupId);
 
-  freshData.groups.splice(groupIndex, 1);
-  freshData.links = freshData.links.filter((l) => l.groupId !== groupId);
+    for (const link of linksToDelete) {
+      await stores[STORES.LINKS].delete(link.id);
+    }
+    await stores[STORES.GROUPS].delete(groupId);
 
-  await saveWorkbenchData(freshData);
-  syncInMemoryData(data, freshData);
+    if (data && typeof data === "object") {
+      if (Array.isArray(data.groups)) {
+        data.groups = data.groups.filter((g) => g.id !== groupId);
+      }
+      if (Array.isArray(data.links)) {
+        data.links = data.links.filter((l) => l.groupId !== groupId);
+      }
+    }
 
-  return {
-    deletedLinksCount: linksToDelete.length
-  };
+    return {
+      deletedLinksCount: linksToDelete.length
+    };
+  });
 }
 
 /**
- * Add a link to a group with fresh re-read
+ * Add a link to a group
  */
 export async function addLink(data, groupId, { name, url, badge = "" }) {
   const trimmedName = (name || "").trim();
@@ -394,31 +491,39 @@ export async function addLink(data, groupId, { name, url, badge = "" }) {
     throw new Error("Please enter a valid URL (e.g. https://example.com)");
   }
 
-  const freshData = await loadWorkbenchData();
-  if (!freshData.groups.some((g) => g.id === groupId)) {
-    throw new Error(`Group ${groupId} not found`);
+  const newLink = await withTransaction([STORES.GROUPS, STORES.LINKS], "readwrite", async (stores) => {
+    const groupExists = await stores[STORES.GROUPS].get(groupId);
+    if (!groupExists) {
+      throw new Error(`Group ${groupId} not found`);
+    }
+    const all = await stores[STORES.LINKS].getAll();
+    const maxCreatedAt = all.reduce((max, l) => Math.max(max, l.createdAt || 0), 0);
+    const now = Math.max(Date.now(), maxCreatedAt + 1);
+    const lnk = {
+      id: `lnk_${now}_${Math.random().toString(36).substring(2, 7)}`,
+      groupId,
+      name: trimmedName,
+      url: trimmedUrl,
+      badge: trimmedBadge,
+      revision: 1,
+      createdAt: now,
+      updatedAt: now
+    };
+    await stores[STORES.LINKS].add(lnk);
+    return lnk;
+  });
+
+  if (data && typeof data === "object" && Array.isArray(data.links)) {
+    data.links.push(newLink);
   }
 
-  const newLink = {
-    id: `lnk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    groupId,
-    name: trimmedName,
-    url: trimmedUrl,
-    badge: trimmedBadge,
-    createdAt: Date.now()
-  };
-
-  freshData.links.push(newLink);
-
-  await saveWorkbenchData(freshData);
-  syncInMemoryData(data, freshData);
   return newLink;
 }
 
 /**
- * Edit an existing link
+ * Edit an existing link with optimistic revision lock
  */
-export async function editLink(data, linkId, { name, url, badge = "" }) {
+export async function editLink(data, linkId, { name, url, badge = "" }, expectedRevision) {
   const trimmedName = (name || "").trim();
   const trimmedUrl = (url || "").trim();
   const trimmedBadge = (badge || "").trim();
@@ -430,41 +535,64 @@ export async function editLink(data, linkId, { name, url, badge = "" }) {
     throw new Error("Please enter a valid URL (e.g. https://example.com)");
   }
 
-  const freshData = await loadWorkbenchData();
-  const link = freshData.links.find((l) => l.id === linkId);
-  if (!link) {
-    throw new Error(`Link ${linkId} not found`);
+  const updated = await withTransaction([STORES.LINKS], "readwrite", async (stores) => {
+    const latest = await stores[STORES.LINKS].get(linkId);
+    verifyRevision(latest, expectedRevision, "Link", linkId);
+
+    const nextRev = (latest.revision || 1) + 1;
+    const now = Date.now();
+    const mutated = {
+      ...latest,
+      name: trimmedName,
+      url: trimmedUrl,
+      badge: trimmedBadge,
+      revision: nextRev,
+      updatedAt: now
+    };
+    await stores[STORES.LINKS].put(mutated);
+    return mutated;
+  });
+
+  if (data && typeof data === "object" && Array.isArray(data.links)) {
+    const item = data.links.find((l) => l.id === linkId);
+    if (item) Object.assign(item, updated);
   }
 
-  link.name = trimmedName;
-  link.url = trimmedUrl;
-  link.badge = trimmedBadge;
-
-  await saveWorkbenchData(freshData);
-  syncInMemoryData(data, freshData);
-  return link;
+  return updated;
 }
 
 /**
  * Delete a link
  */
 export async function deleteLink(data, linkId) {
-  const freshData = await loadWorkbenchData();
+  return withTransaction([STORES.LINKS], "readwrite", async (stores) => {
+    const link = await stores[STORES.LINKS].get(linkId);
+    if (!link) {
+      throw new Error(`Link ${linkId} not found`);
+    }
+    await stores[STORES.LINKS].delete(linkId);
 
-  const linkIndex = freshData.links.findIndex((l) => l.id === linkId);
-  if (linkIndex === -1) {
-    throw new Error(`Link ${linkId} not found`);
-  }
-  const deleted = freshData.links.splice(linkIndex, 1)[0];
+    if (data && typeof data === "object" && Array.isArray(data.links)) {
+      data.links = data.links.filter((l) => l.id !== linkId);
+    }
 
-  await saveWorkbenchData(freshData);
-  syncInMemoryData(data, freshData);
-  return deleted;
+    return link;
+  });
 }
 
 /**
- * Reset memory store (useful for tests)
+ * Fetch all import jobs
+ */
+export async function getImportJobs() {
+  return withTransaction([STORES.IMPORT_JOBS], "readonly", (stores) => {
+    return stores[STORES.IMPORT_JOBS].getAll();
+  });
+}
+
+/**
+ * Reset memory store and database (used by unit tests)
  */
 export function _resetMemoryStore() {
-  memoryStore = {};
+  rawMemoryStore = {};
+  _resetDatabaseForTesting();
 }

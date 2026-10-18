@@ -792,6 +792,115 @@ body {
 }
 
 /* ==========================================================================
+   Undo Import & Notice Banners
+   ========================================================================== */
+.undo-banner {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius-lg);
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 12px;
+  animation: modalEnter 0.2s ease-out;
+}
+
+@media (prefers-color-scheme: dark) {
+  .undo-banner {
+    background: #052e16;
+    border-color: #14532d;
+  }
+}
+
+.undo-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #166534;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+@media (prefers-color-scheme: dark) {
+  .undo-content {
+    color: #86efac;
+  }
+}
+
+.undo-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preview-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  font-size: 13px;
+}
+
+.preview-stat-row {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-secondary);
+}
+
+.preview-stat-val {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.conflict-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  background: var(--bg-surface);
+}
+
+.conflict-card {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-subtle);
+}
+
+.conflict-url {
+  font-family: monospace;
+  color: var(--primary);
+  word-break: break-all;
+}
+
+.conflict-options {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.conflict-options label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* ==========================================================================
    Responsive Breakpoints
    ========================================================================== */
 @media (max-width: 768px) {
@@ -808,3 +917,4 @@ body {
     grid-template-columns: 1fr;
   }
 }
+

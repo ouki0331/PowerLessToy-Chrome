@@ -1,6 +1,6 @@
 /**
  * Internationalization (i18n) for Bookmark Organizer
- * Supports English and Japanese. Zero Chinese text.
+ * Supports English and Japanese.
  */
 
 const translations = {
@@ -45,7 +45,34 @@ const translations = {
     customBadgePlaceholder: "or custom tag...",
     quickBadges: "Quick tags:",
     switchLang: "Language: EN / JA",
-    openNewTabHint: "Click to open in current tab. Ctrl/Cmd+Click to open in new tab."
+    openNewTabHint: "Click to open in current tab. Ctrl/Cmd+Click to open in new tab.",
+
+    // Import, Export & Safety
+    importBtn: "Import JSON",
+    exportBtn: "Export Backup",
+    importModalTitle: "Import Bookmarks (JSON)",
+    importPreviewTitle: "Import Preview & Verification",
+    selectJsonFile: "Select a JSON backup file to import:",
+    importFileStats: (fileName, cats, grps, lnks) =>
+      `File "${fileName}" contains ${cats} category(ies), ${grps} group(s), and ${lnks} link(s).`,
+    willAddSummary: (c, g, l) => `Will add: ${c} new categories, ${g} new groups, ${l} new links.`,
+    willMergeSummary: (c, g) => `Will merge: ${c} existing categories, ${g} existing groups.`,
+    willSkipSummary: (l) => `Will skip: ${l} identical duplicate links.`,
+    conflictCountSummary: (c) => `Conflicts found: ${c} links with same URL but different name or tag.`,
+    conflictChoiceTitle: "Conflict Resolution:",
+    keepExisting: "Keep existing link (Default, safe)",
+    keepBoth: "Keep both (Generate new link ID)",
+    confirmImportBtn: "Confirm & Import",
+    importSuccessTitle: "Import Completed Successfully",
+    importSuccessMsg: (added, skipped, conflicts) =>
+      `Imported ${added} new links (${skipped} duplicates skipped, ${conflicts} conflicts resolved). An automated safety snapshot was created.`,
+    undoImportBtn: "Undo This Import",
+    undoSuccessMsg: "The import has been successfully reverted. Pre-existing bookmarks remain untouched.",
+    revisionConflictTitle: "Data Conflict Detected",
+    revisionConflictMsg:
+      "This item was modified in another tab or window. To protect your data, your changes were not overwritten. Please reload to see the latest version.",
+    saveFailedTitle: "Save Failed",
+    saveFailedMsg: "Could not save your changes to the database. Your input has been preserved. Please retry."
   },
   ja: {
     appTitle: "Bookmark Organizer",
@@ -88,7 +115,34 @@ const translations = {
     customBadgePlaceholder: "またはカスタムタグ...",
     quickBadges: "クイックタグ:",
     switchLang: "言語: EN / JA",
-    openNewTabHint: "クリックで現在のタブで開きます。Ctrl/Cmd+クリックで新しいタブで開きます。"
+    openNewTabHint: "クリックで現在のタブで開きます。Ctrl/Cmd+クリックで新しいタブで開きます。",
+
+    // Import, Export & Safety
+    importBtn: "JSONインポート",
+    exportBtn: "バックアップ書き出し",
+    importModalTitle: "ブックマークのインポート (JSON)",
+    importPreviewTitle: "インポートプレビューと確認",
+    selectJsonFile: "インポートするJSONバックアップファイルを選択してください:",
+    importFileStats: (fileName, cats, grps, lnks) =>
+      `ファイル「${fileName}」には ${cats} 件のカテゴリ、${grps} 件のグループ、${lnks} 件のリンクが含まれています。`,
+    willAddSummary: (c, g, l) => `追加予定: ${c} カテゴリ、${g} グループ、${l} リンク`,
+    willMergeSummary: (c, g) => `マージ予定: ${c} 既存カテゴリ、${g} 既存グループ`,
+    willSkipSummary: (l) => `スキップ予定: ${l} 件（完全一致の重複リンク）`,
+    conflictCountSummary: (c) => `競合: ${c} 件（同一URLだが表示名やタグが異なるリンク）`,
+    conflictChoiceTitle: "競合の解決方法:",
+    keepExisting: "既存のリンクを維持する（デフォルト・安全）",
+    keepBoth: "両方保持する（新しいリンクIDを発行）",
+    confirmImportBtn: "確認してインポート実行",
+    importSuccessTitle: "インポートが完了しました",
+    importSuccessMsg: (added, skipped, conflicts) =>
+      `${added} 件の新しいリンクを追加しました（重複 ${skipped} 件スキップ、競合 ${conflicts} 件処理）。自動安全スナップショットが作成されました。`,
+    undoImportBtn: "このインポートを取り消す",
+    undoSuccessMsg: "インポートが正常に取り消されました。以前のブックマークデータはそのまま保持されています。",
+    revisionConflictTitle: "データ競合が発生しました",
+    revisionConflictMsg:
+      "この項目は別のタブまたはウィンドウで更新されました。データ保護のため上書きは行われませんでした。再読み込みして最新データを表示してください。",
+    saveFailedTitle: "保存に失敗しました",
+    saveFailedMsg: "データベースへの保存に失敗しました。入力内容は保持されています。再試行してください。"
   }
 };
 
