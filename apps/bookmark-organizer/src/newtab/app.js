@@ -3,7 +3,7 @@
  * Follows Quiet Workbench UI/UX specifications and DEC product decisions.
  * Implements:
  * - Persistent keyboard focus on category switching (P1 fix)
- * - Cross-tab synchronization via storage events (P1 fix)
+ * - Cross-tab synchronization via BroadcastChannel announcements of IndexedDB writes
  * - Safe DOM creation without unsafe innerHTML interpolation (P2 fix)
  * - Optimistic concurrency control via entity revisions (expectedRevision)
  * - JSON Import with Preview, Conflict Resolution, Snapshot, and Undo
@@ -23,15 +23,17 @@ import {
   editLink,
   deleteLink,
   isValidUrl,
-  subscribeStorageChanges,
-  getImportJobs
+  subscribeStorageChanges
 } from "./storage.js";
 
 import {
   generateImportPreview,
   executeImport,
+  previewUndoImport,
   undoImport,
-  generateBackupJson,
+  previewSnapshotRestore,
+  restoreSnapshot,
+  exportBackup,
   getBackupFilename
 } from "./import-export.js";
 
@@ -128,22 +130,39 @@ async function initWorkbench() {
     renderAll();
   } catch (err) {
     console.error("Failed to load workbench data:", err);
+    if (elements.errorDesc) {
+      let desc = t("loadErrorDesc");
+      if (err?.code === "CORRUPTED_LEGACY_DATA") {
+        desc = `${t("migrationErrorDesc")} ${(err.details || []).slice(0, 5).join("; ")}`;
+      }
+      elements.errorDesc.textContent = desc;
+    }
     elements.errorBanner.style.display = "flex";
   }
 }
 
 /**
- * Listen for storage changes from other browser tabs
+ * Listen for data changes committed by other tabs (IndexedDB writes are
+ * announced over BroadcastChannel). Reloads are debounced, and this tab keeps
+ * its own active category so another tab's navigation does not move it.
  */
+let syncTimer = null;
 function setupStorageSubscription() {
-  subscribeStorageChanges(async () => {
-    try {
-      const freshData = await loadWorkbenchData();
-      state.data = freshData;
-      renderAll(false);
-    } catch (err) {
-      console.warn("Storage sync error from background/other tab:", err);
-    }
+  subscribeStorageChanges(() => {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(async () => {
+      try {
+        const localActive = state.data?.activeCategoryId;
+        const freshData = await loadWorkbenchData();
+        if (localActive && freshData.categories.some((c) => c.id === localActive)) {
+          freshData.activeCategoryId = localActive;
+        }
+        state.data = freshData;
+        renderAll(false);
+      } catch (err) {
+        console.warn("Storage sync error from background/other tab:", err);
+      }
+    }, 80);
   });
 }
 
@@ -187,15 +206,7 @@ function setupEventListeners() {
   // Undo Import Button
   elements.undoImportBtn?.addEventListener("click", async () => {
     if (!state.lastImportJobId) return;
-    try {
-      await undoImport(state.lastImportJobId);
-      state.lastImportJobId = null;
-      elements.undoBanner.style.display = "none";
-      await initWorkbench();
-      alert(t("undoSuccessMsg"));
-    } catch (err) {
-      alert(`Failed to undo import: ${err.message}`);
-    }
+    await handleUndoImport(state.lastImportJobId);
   });
 
   // Dismiss Undo Banner
@@ -246,14 +257,10 @@ function setupEventListeners() {
 // Backup Export & Import Handlers
 // ==========================================================================
 
-function handleExportBackup() {
-  if (!state.data) return;
+async function handleExportBackup() {
   try {
-    const backupObj = generateBackupJson({
-      categories: state.data.categories || [],
-      groups: state.data.groups || [],
-      links: state.data.links || []
-    });
+    // Always read fresh from IndexedDB so another tab's edits are never missed
+    const backupObj = await exportBackup();
 
     const jsonStr = JSON.stringify(backupObj, null, 2);
     const blob = new Blob([jsonStr], { type: "application/json" });
@@ -279,14 +286,10 @@ async function handleImportFile(file) {
     return;
   }
 
-  const jobs = await getImportJobs();
+  // generateImportPreview reads the latest categories/groups/links/importJobs directly from IndexedDB
   const preview = await generateImportPreview({
     fileContent: text,
-    fileName: file.name,
-    existingCategories: state.data.categories || [],
-    existingGroups: state.data.groups || [],
-    existingLinks: state.data.links || [],
-    existingImportJobs: jobs || []
+    fileName: file.name
   });
 
   if (!preview.valid) {
@@ -320,11 +323,21 @@ function openImportErrorsModal(errors) {
   openModal("Import Error", container, () => true, "Close");
 }
 
-function openImportPreviewModal(fileName, fileContent, preview) {
+function openImportPreviewModal(fileName, fileContent, preview, noticeMessage = "") {
   const container = document.createElement("div");
   container.style.display = "flex";
   container.style.flexDirection = "column";
   container.style.gap = "14px";
+
+  if (noticeMessage) {
+    const noticeBox = document.createElement("div");
+    noticeBox.className = "error-banner";
+    const noticeTxt = document.createElement("span");
+    noticeTxt.style.fontSize = "13px";
+    noticeTxt.textContent = noticeMessage;
+    noticeBox.appendChild(noticeTxt);
+    container.appendChild(noticeBox);
+  }
 
   // Warning banner if already imported
   if (preview.alreadyImported) {
@@ -372,7 +385,7 @@ function openImportPreviewModal(fileName, fileContent, preview) {
 
   container.appendChild(statsCard);
 
-  // Conflicts Section (if any)
+  // Conflicts Section (if any) — keyed by deterministic `c.conflictKey` (e.g. "links[0]")
   const conflictResolutions = {};
   if (preview.conflictCount > 0) {
     const conflictSection = document.createElement("div");
@@ -387,6 +400,8 @@ function openImportPreviewModal(fileName, fileContent, preview) {
     conflictList.className = "conflict-list-container";
 
     preview.conflicts.forEach((c, idx) => {
+      conflictResolutions[c.conflictKey] = "keep_existing";
+
       const card = document.createElement("div");
       card.className = "conflict-card";
 
@@ -409,7 +424,7 @@ function openImportPreviewModal(fileName, fileContent, preview) {
       keepExistRadio.value = "keep_existing";
       keepExistRadio.checked = true;
       keepExistRadio.addEventListener("change", () => {
-        conflictResolutions[c.linkId] = "keep_existing";
+        conflictResolutions[c.conflictKey] = "keep_existing";
       });
       keepExistLabel.appendChild(keepExistRadio);
       keepExistLabel.appendChild(document.createTextNode(t("keepExisting")));
@@ -420,7 +435,7 @@ function openImportPreviewModal(fileName, fileContent, preview) {
       keepBothRadio.name = `conflict_${idx}`;
       keepBothRadio.value = "keep_both";
       keepBothRadio.addEventListener("change", () => {
-        conflictResolutions[c.linkId] = "keep_both";
+        conflictResolutions[c.conflictKey] = "keep_both";
       });
       keepBothLabel.appendChild(keepBothRadio);
       keepBothLabel.appendChild(document.createTextNode(t("keepBoth")));
@@ -444,7 +459,8 @@ function openImportPreviewModal(fileName, fileContent, preview) {
         const result = await executeImport({
           importData: fileContent,
           fileName,
-          conflictResolutions
+          conflictResolutions,
+          expectedPlanSignature: preview.planSignature
         });
 
         state.lastImportJobId = result.importJob.id;
@@ -461,11 +477,102 @@ function openImportPreviewModal(fileName, fileContent, preview) {
 
         return true;
       } catch (err) {
+        if (err?.code === "PREVIEW_STALE") {
+          const refreshed = await generateImportPreview({ fileContent, fileName });
+          if (refreshed.valid) {
+            openImportPreviewModal(fileName, fileContent, refreshed, t("previewStaleNotice"));
+            return false;
+          }
+        }
         alert(`Import failed: ${err.message}`);
         return false;
       }
     },
     t("confirmImportBtn")
+  );
+}
+
+/**
+ * Safe Undo Import flow:
+ * 1. Previews whether all imported items are still at revision 1 and contain no
+ *    user-added children.
+ * 2. If safe, executes `undoImport`.
+ * 3. If blocked, displays the impact preview modal listing the modified/added
+ *    items and allowing explicit snapshot restoration if desired.
+ */
+async function handleUndoImport(importJobId) {
+  try {
+    const analysis = await previewUndoImport(importJobId);
+    if (analysis.canUndo) {
+      await undoImport(importJobId);
+      state.lastImportJobId = null;
+      elements.undoBanner.style.display = "none";
+      await initWorkbench();
+      alert(t("undoSuccessMsg"));
+      return;
+    }
+
+    const impact = analysis.snapshotId
+      ? await previewSnapshotRestore(analysis.snapshotId)
+      : null;
+    openUndoBlockedModal(importJobId, analysis, impact);
+  } catch (err) {
+    alert(`Failed to undo import: ${err.message}`);
+  }
+}
+
+function openUndoBlockedModal(importJobId, analysis, impact) {
+  const container = document.createElement("div");
+  container.style.display = "flex";
+  container.style.flexDirection = "column";
+  container.style.gap = "12px";
+
+  const lead = document.createElement("p");
+  lead.textContent = t("undoBlockedMsg");
+  container.appendChild(lead);
+
+  const list = document.createElement("ul");
+  list.style.paddingLeft = "20px";
+  for (const m of analysis.blockers.modified) {
+    const li = document.createElement("li");
+    li.textContent = `Modified ${m.type}: "${m.name}" (revision ${m.revision})`;
+    list.appendChild(li);
+  }
+  for (const g of analysis.blockers.foreignGroups) {
+    const li = document.createElement("li");
+    li.textContent = `User-created group inside imported category: "${g.name}"`;
+    list.appendChild(li);
+  }
+  for (const l of analysis.blockers.foreignLinks) {
+    const li = document.createElement("li");
+    li.textContent = `User-created link inside imported group: "${l.name}" (${l.url})`;
+    list.appendChild(li);
+  }
+  container.appendChild(list);
+
+  if (impact) {
+    const impactNote = document.createElement("p");
+    impactNote.style.color = "var(--danger)";
+    impactNote.style.fontSize = "13px";
+    impactNote.textContent =
+      `Snapshot restore impact: will remove ${impact.categories.removed} category(ies), ` +
+      `${impact.groups.removed} group(s), and ${impact.links.removed} link(s) created since the import.`;
+    container.appendChild(impactNote);
+  }
+
+  openModal(
+    t("undoBlockedTitle"),
+    container,
+    async () => {
+      if (!analysis.snapshotId) return true;
+      await restoreSnapshot(analysis.snapshotId, { markImportJobReverted: importJobId });
+      state.lastImportJobId = null;
+      elements.undoBanner.style.display = "none";
+      await initWorkbench();
+      return true;
+    },
+    t("restoreSnapshotConfirmBtn"),
+    true
   );
 }
 

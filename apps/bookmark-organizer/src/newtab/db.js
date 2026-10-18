@@ -197,82 +197,116 @@ function openBrowserDatabase() {
 }
 
 /**
+ * Cross-tab change notification.
+ *
+ * IndexedDB writes do NOT fire `chrome.storage.onChanged` or `window.storage`
+ * events, so every committed readwrite transaction is announced on a
+ * BroadcastChannel. Each module instance (i.e. each tab) tags its messages with
+ * a random source ID so a tab can ignore its own announcements.
+ */
+export const DATA_CHANGE_CHANNEL = "powerless_toy_bookmark_organizer_db_v1";
+const INSTANCE_SOURCE_ID = `src_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
+let publishChannel = null;
+
+function createChannel() {
+  if (typeof BroadcastChannel === "undefined") return null;
+  const channel = new BroadcastChannel(DATA_CHANGE_CHANNEL);
+  // Node.js: do not keep the test runner alive because of an idle channel
+  if (typeof channel.unref === "function") channel.unref();
+  return channel;
+}
+
+export function notifyDataChanged(storeNames = []) {
+  try {
+    if (!publishChannel) publishChannel = createChannel();
+    publishChannel?.postMessage({
+      type: "db-changed",
+      sourceId: INSTANCE_SOURCE_ID,
+      stores: storeNames,
+      at: Date.now()
+    });
+  } catch {
+    // Notification is best-effort; data has already been committed safely.
+  }
+}
+
+/**
+ * Subscribe to data changes committed by OTHER tabs.
+ * Returns an unsubscribe function.
+ */
+export function subscribeDataChanges(callback) {
+  const channel = createChannel();
+  if (!channel) return () => {};
+  channel.onmessage = (event) => {
+    const msg = event?.data;
+    if (!msg || msg.type !== "db-changed") return;
+    if (msg.sourceId === INSTANCE_SOURCE_ID) return;
+    callback(msg);
+  };
+  return () => channel.close();
+}
+
+/**
  * Universal transaction runner that works seamlessly in Browser and Node
  */
 export async function withTransaction(storeNames, mode, callback) {
+  const names = Array.isArray(storeNames) ? storeNames : [storeNames];
+
   if (typeof indexedDB === "undefined") {
-    return getMemoryDb().runTransaction(storeNames, mode, callback);
+    const result = await getMemoryDb().runTransaction(names, mode, callback);
+    if (mode === "readwrite") notifyDataChanged(names);
+    return result;
   }
 
   const db = await openBrowserDatabase();
-  const tx = db.transaction(storeNames, mode);
-
-  const stores = {};
-  const names = Array.isArray(storeNames) ? storeNames : [storeNames];
-  for (const name of names) {
-    const s = tx.objectStore(name);
-    stores[name] = {
-      get: (key) =>
-        new Promise((resolve, reject) => {
-          const req = s.get(key);
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject(req.error);
-        }),
-      getAll: () =>
-        new Promise((resolve, reject) => {
-          const req = s.getAll();
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject(req.error);
-        }),
-      put: (value) =>
-        new Promise((resolve, reject) => {
-          const req = s.put(value);
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject(req.error);
-        }),
-      add: (value) =>
-        new Promise((resolve, reject) => {
-          const req = s.add(value);
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject(req.error);
-        }),
-      delete: (key) =>
-        new Promise((resolve, reject) => {
-          const req = s.delete(key);
-          req.onsuccess = () => resolve();
-          req.onerror = () => reject(req.error);
-        }),
-      clear: () =>
-        new Promise((resolve, reject) => {
-          const req = s.clear();
-          req.onsuccess = () => resolve();
-          req.onerror = () => reject(req.error);
-        }),
-      getAllByIndex: (indexName, value) =>
-        new Promise((resolve, reject) => {
-          const idx = s.index(indexName);
-          const req = idx.getAll(value);
-          req.onsuccess = () => resolve(req.result);
-          req.onerror = () => reject(req.error);
-        })
-    };
-  }
-
   try {
-    const result = await callback(stores);
-    await new Promise((resolve, reject) => {
+    const tx = db.transaction(names, mode);
+
+    // Attach completion handlers BEFORE issuing any request so the
+    // complete/abort event can never be missed.
+    const completion = new Promise((resolve, reject) => {
       tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(new Error("IndexedDB transaction aborted"));
+      tx.onerror = () => reject(tx.error || new Error("IndexedDB transaction error"));
+      tx.onabort = () => reject(tx.error || new Error("IndexedDB transaction aborted"));
     });
-    return result;
-  } catch (err) {
-    try {
-      tx.abort();
-    } catch {
-      // Ignored if already completed or aborted
+    // Prevent an unhandled rejection when we abort deliberately below
+    completion.catch(() => {});
+
+    const wrap = (req) =>
+      new Promise((resolve, reject) => {
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+
+    const stores = {};
+    for (const name of names) {
+      const s = tx.objectStore(name);
+      stores[name] = {
+        get: (key) => wrap(s.get(key)),
+        getAll: () => wrap(s.getAll()),
+        put: (value) => wrap(s.put(value)),
+        add: (value) => wrap(s.add(value)),
+        delete: (key) => wrap(s.delete(key)).then(() => undefined),
+        clear: () => wrap(s.clear()).then(() => undefined),
+        getAllByIndex: (indexName, value) => wrap(s.index(indexName).getAll(value))
+      };
     }
-    throw err;
+
+    let result;
+    try {
+      result = await callback(stores);
+    } catch (err) {
+      try {
+        tx.abort();
+      } catch {
+        // Ignored if already completed or aborted
+      }
+      throw err;
+    }
+
+    await completion;
+    if (mode === "readwrite") notifyDataChanged(names);
+    return result;
   } finally {
     db.close();
   }

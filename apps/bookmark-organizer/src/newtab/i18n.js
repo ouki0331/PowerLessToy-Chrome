@@ -72,7 +72,13 @@ const translations = {
     revisionConflictMsg:
       "This item was modified in another tab or window. To protect your data, your changes were not overwritten. Please reload to see the latest version.",
     saveFailedTitle: "Save Failed",
-    saveFailedMsg: "Could not save your changes to the database. Your input has been preserved. Please retry."
+    saveFailedMsg: "Could not save your changes to the database. Your input has been preserved. Please retry.",
+    migrationErrorDesc: "Legacy storage data is invalid and was preserved untouched:",
+    undoBlockedTitle: "Cannot Undo Automatically",
+    undoBlockedMsg:
+      "Some imported items were edited or new items were added inside them. Automatic undo was blocked to prevent data loss or orphan records. You may restore the pre-import snapshot instead (which will discard changes made after the import).",
+    restoreSnapshotConfirmBtn: "Restore Pre-Import Snapshot",
+    previewStaleNotice: "Bookmarks changed in another tab while previewing. The preview has been refreshed with the latest data."
   },
   ja: {
     appTitle: "Bookmark Organizer",
@@ -142,7 +148,13 @@ const translations = {
     revisionConflictMsg:
       "この項目は別のタブまたはウィンドウで更新されました。データ保護のため上書きは行われませんでした。再読み込みして最新データを表示してください。",
     saveFailedTitle: "保存に失敗しました",
-    saveFailedMsg: "データベースへの保存に失敗しました。入力内容は保持されています。再試行してください。"
+    saveFailedMsg: "データベースへの保存に失敗しました。入力内容は保持されています。再試行してください。",
+    migrationErrorDesc: "旧ストレージのデータ構造に問題があるため、元のデータを変更せず保持しました:",
+    undoBlockedTitle: "自動取り消しができません",
+    undoBlockedMsg:
+      "インポートされた項目が編集されたか、その中に新しい項目が追加されています。データ消失や孤立リンクを防ぐため自動削除を停止しました。インポート前のスナップショットから復元することも可能です（インポート後の変更は破棄されます）。",
+    restoreSnapshotConfirmBtn: "インポート前のスナップショットを復元",
+    previewStaleNotice: "プレビュー中に別のタブでデータが変更されたため、最新データでプレビューを更新しました。"
   }
 };
 

@@ -9,7 +9,13 @@
  * - JSON Import/Export with snapshot and undo support
  */
 
-import { withTransaction, STORES, verifyRevision, _resetDatabaseForTesting } from "./db.js";
+import {
+  withTransaction,
+  STORES,
+  verifyRevision,
+  subscribeDataChanges,
+  _resetDatabaseForTesting
+} from "./db.js";
 import { migrateFromChromeStorageIfNeeded } from "./migration.js";
 import { STORAGE_KEY, ACTIVE_CAT_KEY } from "./constants.js";
 
@@ -81,30 +87,37 @@ export async function rawWrite(key, value) {
 }
 
 /**
- * Subscribe to storage changes across tabs
+ * Subscribe to data changes made in OTHER tabs.
+ *
+ * Categories, groups and links live in IndexedDB, whose writes do not fire
+ * storage events, so the primary signal is the BroadcastChannel announcement
+ * emitted by `withTransaction` after every committed readwrite transaction.
+ * Legacy chrome.storage / window.storage events are still forwarded.
  */
 export function subscribeStorageChanges(callback) {
+  const unsubscribers = [];
+
+  unsubscribers.push(subscribeDataChanges((msg) => callback({ source: "indexeddb", ...msg })));
+
   if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.onChanged) {
     const listener = (changes, areaName) => {
-      if (areaName === "local" && (changes[STORAGE_KEY] || changes[ACTIVE_CAT_KEY])) {
-        callback(changes);
+      if (areaName === "local" && changes[STORAGE_KEY]) {
+        callback({ source: "chrome.storage", changes });
       }
     };
     chrome.storage.onChanged.addListener(listener);
-    return () => chrome.storage.onChanged.removeListener(listener);
-  }
-
-  if (typeof window !== "undefined" && window.addEventListener) {
+    unsubscribers.push(() => chrome.storage.onChanged.removeListener(listener));
+  } else if (typeof window !== "undefined" && window.addEventListener) {
     const listener = (event) => {
-      if (event.key === STORAGE_KEY || event.key === ACTIVE_CAT_KEY) {
-        callback({ [event.key]: { newValue: event.newValue ? JSON.parse(event.newValue) : null } });
+      if (event.key === STORAGE_KEY) {
+        callback({ source: "window.storage", key: event.key });
       }
     };
     window.addEventListener("storage", listener);
-    return () => window.removeEventListener("storage", listener);
+    unsubscribers.push(() => window.removeEventListener("storage", listener));
   }
 
-  return () => {};
+  return () => unsubscribers.forEach((fn) => fn());
 }
 
 /**
@@ -169,54 +182,10 @@ export async function loadWorkbenchData() {
   };
 }
 
-/**
- * Persist workbench data atomically (provided for backward compatibility)
- */
-export async function saveWorkbenchData(data) {
-  if (!data || !Array.isArray(data.categories) || data.categories.length === 0) {
-    throw new Error("Invalid data structure: non-empty categories array required");
-  }
-
-  await withTransaction(
-    [STORES.CATEGORIES, STORES.GROUPS, STORES.LINKS],
-    "readwrite",
-    async (stores) => {
-      await stores[STORES.CATEGORIES].clear();
-      await stores[STORES.GROUPS].clear();
-      await stores[STORES.LINKS].clear();
-
-      const now = Date.now();
-      for (const cat of data.categories || []) {
-        await stores[STORES.CATEGORIES].put({
-          ...cat,
-          revision: cat.revision || 1,
-          createdAt: cat.createdAt || now,
-          updatedAt: cat.updatedAt || now
-        });
-      }
-      for (const grp of data.groups || []) {
-        await stores[STORES.GROUPS].put({
-          ...grp,
-          revision: grp.revision || 1,
-          createdAt: grp.createdAt || now,
-          updatedAt: grp.updatedAt || now
-        });
-      }
-      for (const lnk of data.links || []) {
-        await stores[STORES.LINKS].put({
-          ...lnk,
-          revision: lnk.revision || 1,
-          createdAt: lnk.createdAt || now,
-          updatedAt: lnk.updatedAt || now
-        });
-      }
-    }
-  );
-
-  if (data.activeCategoryId) {
-    await rawWrite(ACTIVE_CAT_KEY, data.activeCategoryId);
-  }
-}
+// NOTE: A former `saveWorkbenchData()` helper cleared all stores and rewrote
+// them from a page snapshot. It bypassed revision checks and could overwrite
+// changes from other tabs, so it was removed. All writes go through the
+// object-level, revision-checked functions below.
 
 
 /**

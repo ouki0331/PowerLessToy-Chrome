@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 
 import {
   loadWorkbenchData,
-  saveWorkbenchData,
   setActiveCategory,
   addCategory,
   renameCategory,
@@ -176,7 +175,8 @@ describe("Bookmark Organizer - Storage & Concurrency Logic", () => {
     await assert.rejects(async () => {
       await loadWorkbenchData();
     }, (err) => {
-      assert.equal(err.code, "CORRUPTED_STORAGE");
+      // Rejected by strict migration validation before anything is written
+      assert.equal(err.code, "CORRUPTED_LEGACY_DATA");
       return true;
     });
 
@@ -185,6 +185,7 @@ describe("Bookmark Organizer - Storage & Concurrency Logic", () => {
     assert.equal(rawAfter.groups.length, 1);
     assert.equal(rawAfter.groups[0].id, "valuable_group");
     assert.equal(rawAfter.categories.length, 0); // Not replaced with 3 seed categories!
+    assert.notEqual(await rawRead("powerless_toy_migration_completed_v1"), true);
   });
 
   it("does NOT overwrite malformed non-object storage data (P1 fix)", async () => {

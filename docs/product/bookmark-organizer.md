@@ -765,56 +765,80 @@ L0 Bookmark Organizer 新标签页书签工作台
 
 #### 导入与导出 JSON Schema 规范 (`formatVersion: 1`)
 
+采用**扁平三顶层数组结构**（`categories`、`groups`、`links`），通过 `categoryId` 与 `groupId` 建立显式引用关系，与 IndexedDB 表结构及备份导出格式严格对齐。禁止使用嵌套的 `categories[].groups[].links[]` 结构（校验器会显式报错拦截，杜绝静默忽略）：
+
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "PowerLessToy Bookmark Organizer Import/Export Format",
   "type": "object",
-  "required": ["formatVersion", "categories"],
+  "required": ["formatVersion", "categories", "groups", "links"],
   "properties": {
     "formatVersion": { "type": "integer", "enum": [1] },
+    "exportedAt": { "type": "string", "format": "date-time" },
     "categories": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name"],
+        "required": ["id", "name"],
         "properties": {
-          "id": { "type": "string" },
+          "id": { "type": "string", "minLength": 1 },
           "name": { "type": "string", "minLength": 1 },
           "description": { "type": "string" },
           "revision": { "type": "integer", "minimum": 1 },
-          "groups": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["name"],
-              "properties": {
-                "id": { "type": "string" },
-                "name": { "type": "string", "minLength": 1 },
-                "revision": { "type": "integer", "minimum": 1 },
-                "links": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "required": ["name", "url"],
-                    "properties": {
-                      "id": { "type": "string" },
-                      "name": { "type": "string", "minLength": 1 },
-                      "url": { "type": "string", "format": "uri" },
-                      "badge": { "type": "string" },
-                      "revision": { "type": "integer", "minimum": 1 }
-                    }
-                  }
-                }
-              }
-            }
-          }
+          "createdAt": { "type": "string" },
+          "updatedAt": { "type": "string" }
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "categoryId", "name"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "categoryId": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "revision": { "type": "integer", "minimum": 1 },
+          "createdAt": { "type": "string" },
+          "updatedAt": { "type": "string" }
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["groupId", "name", "url"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "groupId": { "type": "string", "minLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "url": { "type": "string", "format": "uri" },
+          "badge": { "type": "string" },
+          "revision": { "type": "integer", "minimum": 1 },
+          "createdAt": { "type": "string" },
+          "updatedAt": { "type": "string" }
         }
       }
     }
   }
 }
 ```
+
+校验器同时执行**引用完整性校验**：
+- `categories` 与 `groups` 的 `id` 必须非空且在各自数组内唯一；`links` 若提供 `id` 也必须唯一。
+- 每个 `group.categoryId` 必须指向同一导入文件中的某个 `category.id`。
+- 每个 `link.groupId` 必须指向同一导入文件中的某个 `group.id`。
+- 缺失 `id` 的链接使用稳定的数组下标键（`links[i]`）标识冲突策略，确保“同时保留（Keep both）”策略在预览与执行阶段完全一致。
+
+#### 撤销导入安全保护与快照恢复
+
+当用户点击“撤销本次导入”时，系统在事务前执行所有权与变更检查（`analyzeUndo`）：
+- 检查本次导入创建的分类、分组、链接的 `revision` 是否仍为 `1`（未被用户后续编辑）。
+- 检查本次导入创建的分类或分组下是否包含非本次导入新增的子分组或子链接（防止删父留子产生孤儿记录）。
+- 若存在后续修改或新增子项，直接阻断自动批次删除（返回 `UNDO_BLOCKED`），并在弹窗中明确展示受影响数量，提供**从导入前快照恢复（`restoreSnapshot`）**的显式选项及会回滚的后续变更统计。
 
 #### 并发控制与乐观锁模型
 
@@ -830,9 +854,9 @@ L0 Bookmark Organizer 新标签页书签工作台
    - `links`：链接表，包含 `id`, `groupId`, `name`, `url`, `badge`, `revision`, `createdAt`, `updatedAt`。
    - `importJobs`：导入作业批次审计表，记录文件哈希、新增 ID、导入时间与关联快照。
    - `snapshots`：快照表，保存导入前及重要变更前的完整数据快照。
-   - `metadata`：元数据表，记录架构版本与持久化迁移标记。
+   - `metadata`：元数据表，权威记录架构版本与持久化迁移状态（`key: "migration"`）。只要 IndexedDB 中已存在任何业务记录，即使 `chrome.storage.local` 中的轻量迁移标记丢失，也绝不清空或覆盖 IndexedDB，而是自动对账补全迁移状态；旧存储若存在损坏的非数组或非法记录，立即以 `CORRUPTED_LEGACY_DATA` 阻断迁移并保留现场。
 2. **轻量偏好存储**：`chrome.storage.local` 仅用于当前激活分类 (`powerless_toy_active_category_v1`) 与界面偏好。
-3. **跨标签页实时同步**：监听 `chrome.storage.onChanged` 与 `window.storage` 事件，实现多标签页并发编辑的实时感知与防踩踏。
+3. **跨标签页实时同步**：所有已提交的 IndexedDB 读写事务通过 `BroadcastChannel("powerless_toy_bookmark_organizer_db_v1")` 广播变更通知，结合 `chrome.storage.onChanged` 与 `window.storage` 事件，实现多标签页并发编辑、导入、撤销的实时刷新；导出与导入预览始终从 IndexedDB 直接读取最新状态。
 
 ## 8. 跨功能状态
 

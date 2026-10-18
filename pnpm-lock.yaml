@@ -8,10 +8,24 @@ importers:
 
   .: {}
 
-  apps/bookmark-organizer: {}
+  apps/bookmark-organizer:
+    devDependencies:
+      fake-indexeddb:
+        specifier: ^6.2.6
+        version: 6.2.6
 
   apps/element-remover: {}
 
   apps/message-center: {}
 
   packages/shared: {}
+
+packages:
+
+  fake-indexeddb@6.2.6:
+    resolution: {integrity: sha512-ihhmr0KoET51jT8R4YhbUYuLLvr1qqO6INISygtN16i8loR8kAxtAUr4+EKHTSMjL+lggaAn4OC7DRqzrNgnuQ==}
+    engines: {node: '>=18'}
+
+snapshots:
+
+  fake-indexeddb@6.2.6: {}

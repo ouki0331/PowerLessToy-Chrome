@@ -20,19 +20,19 @@ UI/UX Design Guidelines: [`docs/product/bookmark-organizer-ui.md`](../../docs/pr
 - **Accessible Keyboard Navigation (`DEC-003`)**: Tab/Shift+Tab boundary detection to avoid keyboard traps; Arrow key cyclical category navigation without DOM reconstruction or focus loss.
 - **Primary Storage (IndexedDB)**:
   - Six dedicated object stores: `categories`, `groups`, `links`, `importJobs`, `snapshots`, and `metadata`.
-  - Seamless zero-loss migration from legacy `chrome.storage.local` with count validation.
-  - Multi-tab real-time sync listening to `chrome.storage.onChanged` and `window.storage`.
+  - Seamless zero-loss migration from legacy `chrome.storage.local` with strict structural validation (`CORRUPTED_LEGACY_DATA` guard), count verification, and authoritative state recorded in IndexedDB `metadata` (never overwrites non-empty IndexedDB if local storage flags are cleared).
+  - Multi-tab real-time sync using `BroadcastChannel` (`powerless_toy_bookmark_organizer_db_v1`) for committed IndexedDB transactions alongside `chrome.storage.onChanged` and `window.storage`.
 - **Optimistic Concurrency Control (`revision`)**:
   - Incremental `revision` counter on all entities.
   - Compares `expectedRevision` before write; returns `CONFLICT` on stale writes with user reload prompt.
 - **Zero-Loss JSON Import/Export (`DATA-IMPORT-001`)**:
   - **Append/Merge Only**: Never replaces or wipes existing workbench data.
-  - **Schema Validation (`formatVersion: 1`)**: Strict structure and URL format checks.
+  - **Canonical Flat Schema (`formatVersion: 1`)**: Uses top-level `categories`, `groups`, and `links` arrays with referential integrity validation (`categoryId`, `groupId`) and explicit rejection of nested structures.
   - **SHA-256 Fingerprinting**: Detects and warns on identical duplicate file imports.
-  - **Interactive Preview & Conflict Resolution**: Previews addition, merge, skip, and conflict counts before writing. Users choose "Keep existing" or "Keep both" (generating unique IDs).
+  - **Interactive Preview & Conflict Resolution**: Shared deterministic `planImport()` planner across preview and execution; uses stable `links[i]` keys so "Keep existing" and "Keep both" work reliably even when imported links omit an `id`.
   - **Pre-Import Snapshot & Atomic Transactions**: Full snapshot captured prior to execution; mid-process failures roll back completely.
-  - **Reversible Undo**: Dedicated "Undo This Import" banner reverts only the newly imported batch.
-  - **Standard Backup Export**: Timestamped JSON backup file that can be round-tripped and re-imported cleanly.
+  - **Ownership-Checked Undo & Snapshot Restore**: Verifies imported items remain at `revision === 1` and have no user-added child groups/links before deleting; if modified or extended, blocks unsafe deletion (`UNDO_BLOCKED`) and offers explicit pre-import snapshot restoration.
+  - **Standard Backup Export**: Reads fresh state directly from IndexedDB to produce a timestamped JSON backup file that round-trips cleanly.
 - **Bilingual Support**: Pure English and Japanese UI strings (no Chinese in production extension).
 
 ## Storage Architecture

@@ -132,12 +132,18 @@ describe("Bookmark Organizer - JSON Import, Export, Snapshots & Undo", () => {
     assert.equal(preview.conflicts.length, 1);
     assert.equal(preview.conflicts[0].existingName, "Stripe Console");
     assert.equal(preview.conflicts[0].incomingName, "Stripe Team Dashboard");
+    const key = preview.conflicts[0].conflictKey;
+    assert.equal(key, "links[0]");
+
+    // Nothing written by the preview
+    assert.equal((await loadWorkbenchData()).links.length, 1);
 
     // Case A: Default resolution "keep_existing"
     const resA = await executeImport({
       importData: incomingJson,
       fileName: "conflicts.json",
-      conflictResolutions: { lnk_conflict_stripe: "keep_existing" }
+      conflictResolutions: { [key]: "keep_existing" },
+      expectedPlanSignature: preview.planSignature
     });
 
     assert.equal(resA.importJob.skippedCount, 1);
@@ -149,12 +155,13 @@ describe("Bookmark Organizer - JSON Import, Export, Snapshots & Undo", () => {
     const resB = await executeImport({
       importData: incomingJson,
       fileName: "conflicts.json",
-      conflictResolutions: { lnk_conflict_stripe: "keep_both" }
+      conflictResolutions: { [key]: "keep_both" }
     });
 
     assert.equal(resB.importJob.addedLinkIds.length, 1);
     const dataB = await loadWorkbenchData();
     assert.equal(dataB.links.length, 2); // Both kept!
+    assert.ok(dataB.links.some((l) => l.id === link.id && l.name === "Stripe Console"));
   });
 
   it("Requirement 10: import failure mid-way results in zero writes (atomic rollback)", async () => {
