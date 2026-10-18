@@ -1,0 +1,7 @@
+{
+  "name": "@powerless-toy/bookmark-organizer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension for organizing bookmarks"
+}
+

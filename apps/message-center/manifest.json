@@ -1,0 +1,7 @@
+{
+  "manifest_version": 3,
+  "name": "PowerLessToy Message Center",
+  "version": "0.1.0",
+  "description": "接收、保存并展示消息。"
+}
+

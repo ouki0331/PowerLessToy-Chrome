@@ -1,0 +1,7 @@
+{
+  "name": "@powerless-toy/message-center",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome extension for receiving and displaying messages"
+}
+

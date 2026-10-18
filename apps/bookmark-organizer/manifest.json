@@ -1,0 +1,7 @@
+{
+  "manifest_version": 3,
+  "name": "PowerLessToy Bookmark Organizer",
+  "version": "0.1.0",
+  "description": "整理、检索与管理 Chrome 书签。"
+}
+
