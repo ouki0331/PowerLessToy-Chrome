@@ -2,6 +2,31 @@
   "manifest_version": 3,
   "name": "PowerLessToy Bookmark Organizer",
   "version": "0.1.0",
-  "description": "整理、检索与管理 Chrome 书签。"
+  "description": "Organize and access project environments and everyday links on Chrome new tab.",
+  "chrome_url_overrides": {
+    "newtab": "src/newtab/index.html"
+  },
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_icon": {
+      "16": "assets/icons/icon-16.png",
+      "48": "assets/icons/icon-48.png",
+      "128": "assets/icons/icon-128.png"
+    }
+  },
+  "options_ui": {
+    "page": "src/options/index.html",
+    "open_in_tab": false
+  },
+  "background": {
+    "service_worker": "src/background/index.js"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "icons": {
+    "16": "assets/icons/icon-16.png",
+    "48": "assets/icons/icon-48.png",
+    "128": "assets/icons/icon-128.png"
+  }
 }
-

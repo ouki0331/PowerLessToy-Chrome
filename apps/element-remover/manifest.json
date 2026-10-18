@@ -2,6 +2,5 @@
   "manifest_version": 3,
   "name": "PowerLessToy Element Remover",
   "version": "0.1.0",
-  "description": "选取并移除当前网页中的指定元素。"
+  "description": "Select and remove designated elements from any web page."
 }
-

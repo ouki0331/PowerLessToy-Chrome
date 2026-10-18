@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bookmark Organizer</title>
+  <link rel="icon" type="image/png" sizes="16x16" href="../../assets/icons/icon-16.png">
+  <link rel="icon" type="image/png" sizes="48x48" href="../../assets/icons/icon-48.png">
+  <link rel="icon" type="image/png" sizes="128x128" href="../../assets/icons/icon-128.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a href="#mainContent" class="skip-link">Skip to main content</a>
+
+  <!-- Top Header -->
+  <header class="workbench-header" role="banner">
+    <div class="header-container">
+      <div class="brand-section">
+        <span class="brand-icon" aria-hidden="true">📑</span>
+        <h1 class="brand-title" id="appBrandTitle">Bookmark Organizer</h1>
+        <span class="brand-badge" id="appTagline">Quiet Workbench</span>
+      </div>
+
+      <div class="header-actions">
+        <button id="langToggleBtn" class="btn btn-ghost btn-sm" title="Toggle Language (EN / JA)">
+          🌐 <span id="currentLangLabel">EN</span>
+        </button>
+        <button id="toggleManageBtn" class="btn btn-secondary btn-sm" aria-pressed="false">
+          <span class="manage-active-indicator" id="manageIndicator" style="display: none;"></span>
+          <span id="manageBtnText">Manage Content</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Category Track -->
+  <nav class="category-nav-wrapper" aria-label="Bookmark Categories">
+    <div class="category-track">
+      <div class="category-tabs" id="categoryTabs" role="tablist" aria-label="Categories">
+        <!-- Rendered dynamically -->
+      </div>
+      <button id="addCategoryBtn" class="category-action-btn" style="display: none;">
+        + Add Category
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="workbench-main" id="mainContent" role="main">
+    <!-- Non-destructive error state -->
+    <div id="errorBanner" class="error-banner" style="display: none;" role="alert">
+      <div class="error-content">
+        <span class="error-title" id="errorTitle">Unable to load data</span>
+        <span class="error-desc" id="errorDesc">Your stored links have not been modified. Click retry to reload.</span>
+      </div>
+      <button id="retryLoadBtn" class="btn btn-secondary btn-sm">Retry</button>
+    </div>
+
+    <!-- Active Category Header -->
+    <div class="category-header" id="categoryHeader">
+      <div class="cat-title-area">
+        <h2 class="active-cat-name" id="activeCatTitle">Category</h2>
+        <span class="cat-stats" id="catStatsLabel">0 groups</span>
+      </div>
+
+      <div class="cat-manage-controls">
+        <div id="catAdminButtons" style="display: none; gap: 6px; display: none;">
+          <button id="renameCatBtn" class="btn btn-ghost btn-sm">Rename</button>
+          <button id="deleteCatBtn" class="btn btn-ghost btn-sm danger">Delete</button>
+        </div>
+        <button id="addGroupBtn" class="btn btn-primary btn-sm">
+          + Add Group
+        </button>
+      </div>
+    </div>
+
+    <!-- Group Grid Container -->
+    <div class="group-grid" id="groupGrid">
+      <!-- Rendered dynamically -->
+    </div>
+
+    <!-- Empty State for Category -->
+    <div class="empty-state" id="categoryEmptyState" style="display: none;">
+      <div class="empty-state-icon" aria-hidden="true">📂</div>
+      <h3 class="empty-state-title" id="emptyCatTitle">No groups in this category yet.</h3>
+      <p class="empty-state-lead" id="emptyCatLead">Create your first group to start organizing your project environments and links.</p>
+      <button id="createFirstGroupBtn" class="btn btn-primary">
+        Create First Group
+      </button>
+    </div>
+  </main>
+
+  <!-- Modal Container for Dialogs -->
+  <div id="modalContainer" style="display: none;"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

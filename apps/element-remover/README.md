@@ -1,16 +1,16 @@
 # Element Remover
 
-选取并移除当前网页中的指定元素。
+Select and remove designated elements from any web page.
 
-## 状态
+## Status
 
-当前仅包含目录和 Manifest V3 最小清单，尚未实现业务功能。
+Currently contains directory structure and minimal Manifest V3 declaration. Feature implementation pending.
 
-## 规划范围
+## Planned Scope
 
-- 进入页面元素选择模式并高亮候选元素
-- 移除用户确认选择的页面元素
+- Enter element selection mode and highlight candidate DOM elements
+- Remove user-selected elements from the current page
 
-## 暂不包含
+## Excluded / Out of Scope
 
-- 跨设备同步元素移除规则
+- Cross-device rule synchronization

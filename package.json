@@ -4,11 +4,12 @@
   "private": true,
   "description": "A monorepo for small Chrome tools that make browsing simpler.",
   "packageManager": "pnpm@11.25.0",
+  "type": "module",
   "scripts": {
-    "check": "node scripts/validate-workspace.mjs"
+    "check": "node scripts/validate-workspace.mjs",
+    "test": "node --test apps/*/tests/*.test.js"
   },
   "engines": {
     "node": ">=24"
   }
 }
-

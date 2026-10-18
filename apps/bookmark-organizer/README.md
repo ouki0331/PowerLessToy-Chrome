@@ -1,38 +1,43 @@
 # Bookmark Organizer
 
-在 Chrome 新标签页中按分类、项目或主题组织并访问常用链接。
+Organize, categorize, and access work projects and environment links directly on Chrome's New Tab page.
 
-## 状态
+## Status
 
-核心 MVP 产品定义已达到 `Ready for Delivery`；结构化文件导入仍处于 `Defining`，当前均未实现。
+MVP 1.0 is implemented and verified. Structured file import remains in `Defining` status.
 
-产品规格：[`docs/product/bookmark-organizer.md`](../../docs/product/bookmark-organizer.md)
+Product Specification: [`docs/product/bookmark-organizer.md`](../../docs/product/bookmark-organizer.md)
 
-UI/UX 指引：[`docs/product/bookmark-organizer-ui.md`](../../docs/product/bookmark-organizer-ui.md)
+UI/UX Design Guidelines: [`docs/product/bookmark-organizer-ui.md`](../../docs/product/bookmark-organizer-ui.md)
 
-## 规划范围
+## Implemented Scope (MVP)
 
-- 用完整书签工作台替代 Chrome 默认新标签页
-- 管理可增删的分类、分组和带环境标识的链接
-- 普通点击当前页打开，`Ctrl/Command+点击`在新标签页打开
+- Overrides Chrome's New Tab with a quiet, responsive workbench panel
+- Multi-level structure: Category -> Project/Topic Group -> Environment Link
+- 3 initial categories on first launch: Work Projects, Company Management, Tech Interests
+- Full CRUD for Categories, Groups, and Links with confirmation dialogs and field validation
+- Dual open behavior: standard click opens in current tab; `Ctrl/Cmd+Click` opens in new tab
+- Accessible keyboard navigation conforming to `DEC-003` (Tab/Shift+Tab boundary handling, Arrow key cycling)
+- Persistent local storage using `chrome.storage.local` with non-destructive error recovery
+- Bilingual UI support (English and Japanese)
 
-## 后续导入需求
+## Future Scope (Deferred)
 
-- 需要支持从用户准备的结构化文件批量导入分类、分组和链接。
-- 候选格式为 JSON 或 XML，当前推荐 JSON 作为主格式，但正式 Schema 尚未确认。
-- 导入前必须完成全量校验并展示分类、分组、链接及错误摘要；用户确认前不得写入现有数据。
-- 合并/替换策略、重复链接处理、版本字段和 XML 兼容性仍需单独完成产品定义。
-- 该能力编号为 `DATA-IMPORT-001`，当前状态为 `Defining / Not built`，不属于当前可直接实现的 MVP。
+- Structured file import (`DATA-IMPORT-001`): batch import from user-supplied JSON files with preview and atomic write
+- Drag-and-drop reordering for categories, groups, and links
+- Global search and filtering across categories
 
-## 暂不包含
+## Excluded from MVP
 
-- 账号、云端或跨设备同步
-- 读取、导入或修改 Chrome 原生书签
-- 搜索、自动抓取网站信息或链接统计
-- 当前 MVP 的结构化文件导入
+- Account authentication, cloud backup, and cross-device sync
+- Reading, importing, or mutating Chrome's native bookmark library
+- Automatic scraping of site favicons, page titles, or meta tags
+- Link health monitoring or visit telemetry
 
-## UI 实现要求
+## Architecture & Code Layers
 
-- 新标签页 UI 必须遵循仓库中的 Bookmark Organizer UI/UX 指引。
-- 实现 agent 应使用已安装的 Impeccable 技能，并采用 `Operate` 模式进行设计与验证。
-- 工作型界面可以克制，但不能以默认组件堆叠、视觉状态缺失或低质量空状态作为简化手段。
+- `src/newtab/`: Full-page digital workbench (HTML, CSS, modern JS modules)
+- `src/background/`: Service Worker lifecycle management
+- `src/popup/`: Toolbar quick launcher and link counter
+- `src/options/`: Extension information and quick entry
+- `tests/`: Automated unit and integration test suite (`node --test`)

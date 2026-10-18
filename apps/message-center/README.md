@@ -1,16 +1,16 @@
 # Message Center
 
-接收、保存并展示消息。
+Receive, store, and display notifications.
 
-## 状态
+## Status
 
-当前仅包含目录和 Manifest V3 最小清单，尚未实现业务功能。
+Currently contains directory structure and minimal Manifest V3 declaration. Feature implementation pending.
 
-## 规划范围
+## Planned Scope
 
-- 接收并保存消息
-- 在扩展界面中展示消息
+- Receive and store notifications
+- Display messages in the extension interface
 
-## 暂不包含
+## Excluded / Out of Scope
 
-- 尚未确定的外部消息服务集成
+- Undefined external messaging service integrations

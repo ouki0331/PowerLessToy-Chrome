@@ -1,0 +1,43 @@
+/**
+ * Constants & Defaults for Bookmark Organizer
+ */
+
+export const STORAGE_KEY = "powerless_toy_bookmarks_v1";
+export const ACTIVE_CAT_KEY = "powerless_toy_active_category_v1";
+
+export const DEFAULT_BADGES = [
+  { id: "local", label: "Local", colorClass: "badge-local" },
+  { id: "dev", label: "Dev", colorClass: "badge-dev" },
+  { id: "test", label: "Test", colorClass: "badge-test" },
+  { id: "prod", label: "Prod", colorClass: "badge-prod" }
+];
+
+export function getInitialSeedData() {
+  const now = Date.now();
+  return {
+    version: 1,
+    categories: [
+      {
+        id: "cat_work_projects",
+        name: "Work Projects",
+        description: "Projects and environment links (Local, Dev, Test, Prod)",
+        createdAt: now
+      },
+      {
+        id: "cat_company_tools",
+        name: "Company Management",
+        description: "Portals, GitHub, internal trackers, and admin tools",
+        createdAt: now + 1
+      },
+      {
+        id: "cat_tech_interests",
+        name: "Tech Interests",
+        description: "Framework documentation, reference sites, and research",
+        createdAt: now + 2
+      }
+    ],
+    groups: [],
+    links: [],
+    activeCategoryId: "cat_work_projects"
+  };
+}

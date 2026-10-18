@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bookmark Organizer</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <div class="popup-header">
+      <div class="brand">
+        <span class="brand-icon">📑</span>
+        <span class="brand-title">Bookmark Organizer</span>
+      </div>
+      <span class="badge-tag">MVP</span>
+    </div>
+    <p class="popup-desc">
+      Your digital workbench for organizing environments and project links directly in Chrome's New Tab.
+    </p>
+    <div class="stats-box" id="statsBox">
+      <div class="stat-item">
+        <span class="stat-num" id="catCount">3</span>
+        <span class="stat-label">Categories</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num" id="groupCount">0</span>
+        <span class="stat-label">Groups</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num" id="linkCount">0</span>
+        <span class="stat-label">Links</span>
+      </div>
+    </div>
+    <div class="actions">
+      <button id="openNewTabBtn" class="btn-primary">
+        Open Workbench
+      </button>
+    </div>
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

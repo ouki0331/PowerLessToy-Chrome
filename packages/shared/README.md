@@ -1,6 +1,5 @@
-# Shared
+# Shared Package
 
-为两个或更多扩展复用的类型、工具和 UI 预留的工作区。
+Reserved workspace for shared types, utilities, and UI components reused across two or more extensions.
 
-当前不包含代码；待出现真实复用需求后再添加模块。
-
+Currently contains no active code. Modules will be introduced as concrete cross-extension reuse patterns emerge.
