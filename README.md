@@ -37,6 +37,8 @@ PowerLessToy 是一个 Chrome 工具扩展集合，目标是让浏览器中的�
 - `assets/icons`：扩展图标
 - `tests`：扩展测试
 
+以后新增扩展时统一遵循 [`apps/README.md`](apps/README.md) 中的固定目录、文件模板、权限规则和完成清单。
+
 ## 本地检查
 
 ```bash
@@ -54,4 +56,3 @@ pnpm check
 - [ ] 书签整理功能
 - [ ] 页面元素选取与移除功能
 - [ ] 消息接收与展示功能
-
