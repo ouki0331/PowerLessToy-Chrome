@@ -54,6 +54,8 @@ pnpm check
 - [x] 共享包预留目录
 - [x] 自动结构校验
 - [x] Bookmark Organizer 产品定义
+- [x] Bookmark Organizer UI/UX 指引
 - [ ] 书签整理功能
+- [ ] Bookmark Organizer 结构化文件导入定义
 - [ ] 页面元素选取与移除功能
 - [ ] 消息接收与展示功能
