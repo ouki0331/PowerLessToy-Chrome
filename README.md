@@ -8,7 +8,7 @@ PowerLessToy 是一个 Chrome 工具扩展集合，目标是让浏览器中的�
 
 | 扩展 | 目录 | 规划用途 |
 | --- | --- | --- |
-| Bookmark Organizer | `apps/bookmark-organizer` | 整理、检索与管理 Chrome 书签 |
+| Bookmark Organizer | `apps/bookmark-organizer` | 在新标签页按分类和分组管理常用链接 |
 | Element Remover | `apps/element-remover` | 选取并移除网页中的指定元素 |
 | Message Center | `apps/message-center` | 接收、保存并展示消息 |
 
@@ -53,6 +53,7 @@ pnpm check
 - [x] Manifest V3 最小清单
 - [x] 共享包预留目录
 - [x] 自动结构校验
+- [x] Bookmark Organizer 产品定义
 - [ ] 书签整理功能
 - [ ] 页面元素选取与移除功能
 - [ ] 消息接收与展示功能

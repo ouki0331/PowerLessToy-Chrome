@@ -23,7 +23,7 @@ apps/<extension>/
 
 ### Bookmark Organizer
 
-负责 Chrome 书签的读取、整理、检索和用户操作界面。未来仅在确有需要时申请 `bookmarks`、`storage` 等权限。
+负责替代 Chrome 新标签页，并按分类、分组和可选环境标识管理用户维护的链接。MVP 不读取或修改 Chrome 原生书签；实现时只申请新标签页入口与本地持久化确实需要的能力。
 
 ### Element Remover
 
@@ -40,4 +40,3 @@ apps/<extension>/
 ## 权限规则
 
 清单目前保持最小权限。实现功能时遵循按需申请原则，避免在骨架阶段声明宽泛的网站访问权限。
-
