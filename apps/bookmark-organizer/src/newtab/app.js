@@ -1,11 +1,14 @@
 /**
  * Main Application Orchestrator for Bookmark Organizer
  * Follows Quiet Workbench UI/UX specifications and DEC product decisions.
+ * Implements:
+ * - Persistent keyboard focus on category switching (P1 fix)
+ * - Cross-tab synchronization via storage events (P1 fix)
+ * - Safe DOM creation without unsafe innerHTML interpolation (P2 fix)
  */
 
 import {
   loadWorkbenchData,
-  saveWorkbenchData,
   setActiveCategory,
   addCategory,
   renameCategory,
@@ -16,7 +19,8 @@ import {
   addLink,
   editLink,
   deleteLink,
-  isValidUrl
+  isValidUrl,
+  subscribeStorageChanges
 } from "./storage.js";
 
 import { handleCategoryKeydown, handleModalKeydown } from "./keyboard.js";
@@ -61,7 +65,6 @@ const elements = {
 
 // Initialize Application
 document.addEventListener("DOMContentLoaded", async () => {
-  // Load language preference
   const savedLang = localStorage.getItem("powerless_toy_lang");
   if (savedLang) {
     setLanguage(savedLang);
@@ -69,6 +72,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   updateI18nLabels();
 
   setupEventListeners();
+  setupStorageSubscription();
   await initWorkbench();
 });
 
@@ -94,11 +98,27 @@ async function initWorkbench() {
   try {
     elements.errorBanner.style.display = "none";
     state.data = await loadWorkbenchData();
-    render();
+    renderAll();
   } catch (err) {
     console.error("Failed to load workbench data:", err);
     elements.errorBanner.style.display = "flex";
   }
+}
+
+/**
+ * Listen for storage changes from other browser tabs
+ */
+function setupStorageSubscription() {
+  subscribeStorageChanges(async () => {
+    try {
+      const freshData = await loadWorkbenchData();
+      state.data = freshData;
+      // Re-render UI with fresh external changes
+      renderAll(false);
+    } catch (err) {
+      console.warn("Storage sync error from background/other tab:", err);
+    }
+  });
 }
 
 function setupEventListeners() {
@@ -108,7 +128,7 @@ function setupEventListeners() {
     setLanguage(nextLang);
     localStorage.setItem("powerless_toy_lang", nextLang);
     updateI18nLabels();
-    render();
+    renderAll(false);
   });
 
   // Toggle Manage Mode
@@ -117,7 +137,7 @@ function setupEventListeners() {
     elements.toggleManageBtn.setAttribute("aria-pressed", state.isManageMode ? "true" : "false");
     elements.manageIndicator.style.display = state.isManageMode ? "inline-block" : "none";
     elements.manageBtnText.textContent = state.isManageMode ? t("doneManaging") : t("manageMode");
-    render();
+    renderAll(false);
   });
 
   // Retry loading
@@ -146,30 +166,49 @@ function setupEventListeners() {
     if (activeCat) openAddGroupModal(activeCat.id);
   });
 
-  // Category Tabs keydown delegation (conforms to DEC-003)
+  // Category Tabs keydown delegation (DEC-003)
   elements.categoryTabs.addEventListener("keydown", (e) => {
-    if (state.activeModal) return; // Ignore while modal is open
+    if (state.activeModal) return;
     const tabElements = Array.from(elements.categoryTabs.querySelectorAll(".category-tab"));
     const currentIndex = tabElements.indexOf(document.activeElement);
     if (currentIndex !== -1) {
       handleCategoryKeydown(e, tabElements, currentIndex, async (newCatId) => {
-        await switchCategory(newCatId);
+        await switchCategory(newCatId, true);
       });
     }
   });
 }
 
 function getActiveCategory() {
-  if (!state.data || !state.data.categories) return null;
+  if (!state.data || !state.data.categories || state.data.categories.length === 0) return null;
   return state.data.categories.find((c) => c.id === state.data.activeCategoryId) || state.data.categories[0];
 }
 
-async function switchCategory(catId) {
-  if (state.data.activeCategoryId === catId) return;
+/**
+ * Switch active category without destroying tab DOM elements.
+ * Preserves keyboard focus on the newly selected tab.
+ */
+async function switchCategory(catId, preserveFocus = false) {
+  if (!state.data) return;
+  state.data.activeCategoryId = catId;
   await setActiveCategory(state.data, catId);
-  render();
 
-  // Keep active tab visible when horizontally scrolling
+  // Update existing category tab button states in place without recreating DOM
+  const tabs = elements.categoryTabs.querySelectorAll(".category-tab");
+  tabs.forEach((tab) => {
+    const isActive = tab.dataset.categoryId === catId;
+    tab.classList.toggle("active", isActive);
+    tab.setAttribute("aria-selected", isActive ? "true" : "false");
+    tab.setAttribute("tabindex", isActive ? "0" : "-1");
+    if (isActive && preserveFocus) {
+      tab.focus();
+    }
+  });
+
+  // Update category header and groups content
+  renderCategoryContent();
+
+  // Scroll tab into view if overflowing horizontally
   const activeTabEl = elements.categoryTabs.querySelector(`[data-category-id="${catId}"]`);
   if (activeTabEl && typeof activeTabEl.scrollIntoView === "function") {
     activeTabEl.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
@@ -180,15 +219,19 @@ async function switchCategory(catId) {
 // Rendering
 // ==========================================================================
 
-function render() {
+function renderAll(maintainActiveFocus = false) {
   if (!state.data) return;
+  renderCategoryTabs(maintainActiveFocus);
+  renderCategoryContent();
+}
 
-  renderCategoryTabs();
+function renderCategoryContent() {
   renderActiveCategoryHeader();
   renderGroups();
 }
 
-function renderCategoryTabs() {
+function renderCategoryTabs(maintainActiveFocus = false) {
+  const previouslyFocusedId = document.activeElement?.dataset?.categoryId;
   elements.categoryTabs.innerHTML = "";
 
   state.data.categories.forEach((cat) => {
@@ -201,8 +244,12 @@ function renderCategoryTabs() {
     tab.dataset.categoryId = cat.id;
     tab.textContent = cat.name;
 
-    tab.addEventListener("click", () => switchCategory(cat.id));
+    tab.addEventListener("click", () => switchCategory(cat.id, false));
     elements.categoryTabs.appendChild(tab);
+
+    if (maintainActiveFocus && cat.id === previouslyFocusedId) {
+      setTimeout(() => tab.focus(), 0);
+    }
   });
 
   elements.addCategoryBtn.style.display = state.isManageMode ? "inline-flex" : "none";
@@ -218,7 +265,6 @@ function renderActiveCategoryHeader() {
   elements.catStatsLabel.textContent = `${currentGroups.length} ${currentGroups.length === 1 ? "group" : "groups"}`;
 
   elements.catAdminButtons.style.display = state.isManageMode ? "inline-flex" : "none";
-  // Disable delete button if only one category exists
   elements.deleteCatBtn.disabled = state.data.categories.length <= 1;
 }
 
@@ -256,7 +302,7 @@ function createGroupCard(group) {
   const title = document.createElement("h3");
   title.id = `group-title-${group.id}`;
   title.className = "group-title";
-  title.textContent = group.name;
+  title.textContent = group.name; // Safe textContent
   header.appendChild(title);
 
   if (state.isManageMode) {
@@ -271,14 +317,14 @@ function createGroupCard(group) {
 
     const renameBtn = document.createElement("button");
     renameBtn.className = "btn-icon";
-    renameBtn.innerHTML = "✏️";
+    renameBtn.textContent = "✏️";
     renameBtn.title = t("rename");
     renameBtn.setAttribute("aria-label", `${t("rename")} ${group.name}`);
     renameBtn.addEventListener("click", () => openRenameGroupModal(group));
 
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "btn-icon danger";
-    deleteBtn.innerHTML = "🗑️";
+    deleteBtn.textContent = "🗑️";
     deleteBtn.title = t("delete");
     deleteBtn.setAttribute("aria-label", `${t("delete")} ${group.name}`);
     deleteBtn.addEventListener("click", () => openDeleteGroupModal(group));
@@ -300,7 +346,10 @@ function createGroupCard(group) {
   if (groupLinks.length === 0) {
     const emptyRow = document.createElement("div");
     emptyRow.className = "group-empty";
-    emptyRow.innerHTML = `<span>${t("noLinksInGroup")}</span>`;
+
+    const emptyText = document.createElement("span");
+    emptyText.textContent = t("noLinksInGroup");
+    emptyRow.appendChild(emptyText);
 
     if (state.isManageMode) {
       const quickAddBtn = document.createElement("button");
@@ -341,24 +390,22 @@ function createLinkItem(link) {
     const lowerBadge = link.badge.toLowerCase();
     const isStandardBadge = ["local", "dev", "test", "prod"].includes(lowerBadge);
     badgeSpan.className = `link-badge ${isStandardBadge ? `badge-${lowerBadge}` : "badge-custom"}`;
-    badgeSpan.textContent = link.badge;
+    badgeSpan.textContent = link.badge; // Safe textContent
     anchor.appendChild(badgeSpan);
   }
 
   const nameSpan = document.createElement("span");
   nameSpan.className = "link-name";
-  nameSpan.textContent = link.name;
+  nameSpan.textContent = link.name; // Safe textContent
   anchor.appendChild(nameSpan);
 
   // Link open behavior strictly implementing OPEN-LINK-001 & DEC-007
   anchor.addEventListener("click", (e) => {
     if (state.isManageMode) {
-      // Prevent navigation when in manage mode
       e.preventDefault();
       return;
     }
 
-    // Ctrl+click or Cmd+click: open in new tab
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
       if (typeof chrome !== "undefined" && chrome.tabs?.create) {
@@ -369,7 +416,6 @@ function createLinkItem(link) {
       return;
     }
 
-    // Normal click: open in current tab
     e.preventDefault();
     window.location.href = link.url;
   });
@@ -382,14 +428,14 @@ function createLinkItem(link) {
 
     const editBtn = document.createElement("button");
     editBtn.className = "btn-icon";
-    editBtn.innerHTML = "✏️";
+    editBtn.textContent = "✏️";
     editBtn.title = t("edit");
     editBtn.setAttribute("aria-label", `${t("edit")} ${link.name}`);
     editBtn.addEventListener("click", () => openEditLinkModal(link));
 
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "btn-icon danger";
-    deleteBtn.innerHTML = "🗑️";
+    deleteBtn.textContent = "🗑️";
     deleteBtn.title = t("delete");
     deleteBtn.setAttribute("aria-label", `${t("delete")} ${link.name}`);
     deleteBtn.addEventListener("click", () => openDeleteLinkModal(link));
@@ -426,7 +472,7 @@ function openModal(titleText, contentEl, onConfirm, confirmBtnText = t("save"), 
   title.textContent = titleText;
   const closeBtn = document.createElement("button");
   closeBtn.className = "btn-icon";
-  closeBtn.innerHTML = "✕";
+  closeBtn.textContent = "✕";
   closeBtn.setAttribute("aria-label", "Close");
   closeBtn.addEventListener("click", closeModal);
   header.appendChild(title);
@@ -485,7 +531,6 @@ function openModal(titleText, contentEl, onConfirm, confirmBtnText = t("save"), 
     }
   });
 
-  // Focus initial input
   const initialInput = dialog.querySelector("input, button");
   if (initialInput) {
     setTimeout(() => initialInput.focus(), 50);
@@ -499,21 +544,33 @@ function closeModal() {
 }
 
 // ==========================================================================
-// Category Modals
+// Category Modals (Safe DOM construction, zero raw innerHTML)
 // ==========================================================================
 
 function openAddCategoryModal() {
   const container = document.createElement("div");
-  container.innerHTML = `
-    <div class="form-group">
-      <label class="form-label" for="newCatName">${t("nameLabel")}</label>
-      <input type="text" id="newCatName" class="form-input" placeholder="e.g. Personal Tools" autofocus>
-      <span class="form-error-msg" id="catNameError" style="display: none;"></span>
-    </div>
-  `;
+  const formGroup = document.createElement("div");
+  formGroup.className = "form-group";
 
-  const nameInput = container.querySelector("#newCatName");
-  const errorEl = container.querySelector("#catNameError");
+  const label = document.createElement("label");
+  label.className = "form-label";
+  label.htmlFor = "newCatName";
+  label.textContent = t("nameLabel");
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.id = "newCatName";
+  nameInput.className = "form-input";
+  nameInput.placeholder = "e.g. Personal Tools";
+
+  const errorEl = document.createElement("span");
+  errorEl.className = "form-error-msg";
+  errorEl.style.display = "none";
+
+  formGroup.appendChild(label);
+  formGroup.appendChild(nameInput);
+  formGroup.appendChild(errorEl);
+  container.appendChild(formGroup);
 
   openModal(t("addCategory"), container, async () => {
     const nameVal = nameInput.value.trim();
@@ -526,23 +583,35 @@ function openAddCategoryModal() {
     }
 
     await addCategory(state.data, nameVal);
-    render();
+    renderAll(true);
     return true;
   });
 }
 
 function openRenameCategoryModal(cat) {
   const container = document.createElement("div");
-  container.innerHTML = `
-    <div class="form-group">
-      <label class="form-label" for="renameCatName">${t("nameLabel")}</label>
-      <input type="text" id="renameCatName" class="form-input" value="${cat.name}" autofocus>
-      <span class="form-error-msg" id="catRenameError" style="display: none;"></span>
-    </div>
-  `;
+  const formGroup = document.createElement("div");
+  formGroup.className = "form-group";
 
-  const nameInput = container.querySelector("#renameCatName");
-  const errorEl = container.querySelector("#catRenameError");
+  const label = document.createElement("label");
+  label.className = "form-label";
+  label.htmlFor = "renameCatName";
+  label.textContent = t("nameLabel");
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.id = "renameCatName";
+  nameInput.className = "form-input";
+  nameInput.value = cat.name; // Safe assignment
+
+  const errorEl = document.createElement("span");
+  errorEl.className = "form-error-msg";
+  errorEl.style.display = "none";
+
+  formGroup.appendChild(label);
+  formGroup.appendChild(nameInput);
+  formGroup.appendChild(errorEl);
+  container.appendChild(formGroup);
 
   openModal(t("rename"), container, async () => {
     const nameVal = nameInput.value.trim();
@@ -555,7 +624,7 @@ function openRenameCategoryModal(cat) {
     }
 
     await renameCategory(state.data, cat.id, nameVal);
-    render();
+    renderAll(true);
     return true;
   });
 }
@@ -571,18 +640,15 @@ function openDeleteCategoryModal(cat) {
   const linksInCat = state.data.links.filter((l) => groupIds.has(l.groupId));
 
   const container = document.createElement("div");
-  container.innerHTML = `
-    <div class="delete-impact-summary">
-      ${t("categoryDeleteConfirm", cat.name, groupsInCat.length, linksInCat.length)}
-    </div>
-  `;
+  container.className = "delete-impact-summary";
+  container.textContent = t("categoryDeleteConfirm", cat.name, groupsInCat.length, linksInCat.length); // Safe textContent
 
   openModal(
     t("deleteCategoryTitle"),
     container,
     async () => {
       await deleteCategory(state.data, cat.id);
-      render();
+      renderAll(true);
       return true;
     },
     t("confirmDelete"),
@@ -591,21 +657,33 @@ function openDeleteCategoryModal(cat) {
 }
 
 // ==========================================================================
-// Group Modals
+// Group Modals (Safe DOM construction, zero raw innerHTML)
 // ==========================================================================
 
 function openAddGroupModal(categoryId) {
   const container = document.createElement("div");
-  container.innerHTML = `
-    <div class="form-group">
-      <label class="form-label" for="newGroupName">${t("nameLabel")}</label>
-      <input type="text" id="newGroupName" class="form-input" placeholder="e.g. Order Service" autofocus>
-      <span class="form-error-msg" id="groupNameError" style="display: none;"></span>
-    </div>
-  `;
+  const formGroup = document.createElement("div");
+  formGroup.className = "form-group";
 
-  const nameInput = container.querySelector("#newGroupName");
-  const errorEl = container.querySelector("#groupNameError");
+  const label = document.createElement("label");
+  label.className = "form-label";
+  label.htmlFor = "newGroupName";
+  label.textContent = t("nameLabel");
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.id = "newGroupName";
+  nameInput.className = "form-input";
+  nameInput.placeholder = "e.g. Order Service";
+
+  const errorEl = document.createElement("span");
+  errorEl.className = "form-error-msg";
+  errorEl.style.display = "none";
+
+  formGroup.appendChild(label);
+  formGroup.appendChild(nameInput);
+  formGroup.appendChild(errorEl);
+  container.appendChild(formGroup);
 
   openModal(t("addGroup"), container, async () => {
     const nameVal = nameInput.value.trim();
@@ -618,23 +696,35 @@ function openAddGroupModal(categoryId) {
     }
 
     await addGroup(state.data, categoryId, nameVal);
-    render();
+    renderCategoryContent();
     return true;
   });
 }
 
 function openRenameGroupModal(group) {
   const container = document.createElement("div");
-  container.innerHTML = `
-    <div class="form-group">
-      <label class="form-label" for="renameGroupName">${t("nameLabel")}</label>
-      <input type="text" id="renameGroupName" class="form-input" value="${group.name}" autofocus>
-      <span class="form-error-msg" id="groupRenameError" style="display: none;"></span>
-    </div>
-  `;
+  const formGroup = document.createElement("div");
+  formGroup.className = "form-group";
 
-  const nameInput = container.querySelector("#renameGroupName");
-  const errorEl = container.querySelector("#groupRenameError");
+  const label = document.createElement("label");
+  label.className = "form-label";
+  label.htmlFor = "renameGroupName";
+  label.textContent = t("nameLabel");
+
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.id = "renameGroupName";
+  nameInput.className = "form-input";
+  nameInput.value = group.name; // Safe assignment
+
+  const errorEl = document.createElement("span");
+  errorEl.className = "form-error-msg";
+  errorEl.style.display = "none";
+
+  formGroup.appendChild(label);
+  formGroup.appendChild(nameInput);
+  formGroup.appendChild(errorEl);
+  container.appendChild(formGroup);
 
   openModal(t("rename"), container, async () => {
     const nameVal = nameInput.value.trim();
@@ -647,7 +737,7 @@ function openRenameGroupModal(group) {
     }
 
     await renameGroup(state.data, group.id, nameVal);
-    render();
+    renderCategoryContent();
     return true;
   });
 }
@@ -656,18 +746,15 @@ function openDeleteGroupModal(group) {
   const linksInGroup = state.data.links.filter((l) => l.groupId === group.id);
 
   const container = document.createElement("div");
-  container.innerHTML = `
-    <div class="delete-impact-summary">
-      ${t("groupDeleteConfirm", group.name, linksInGroup.length)}
-    </div>
-  `;
+  container.className = "delete-impact-summary";
+  container.textContent = t("groupDeleteConfirm", group.name, linksInGroup.length); // Safe textContent
 
   openModal(
     t("deleteGroupTitle"),
     container,
     async () => {
       await deleteGroup(state.data, group.id);
-      render();
+      renderCategoryContent();
       return true;
     },
     t("confirmDelete"),
@@ -676,46 +763,85 @@ function openDeleteGroupModal(group) {
 }
 
 // ==========================================================================
-// Link Modals
+// Link Modals (Safe DOM construction, zero raw innerHTML)
 // ==========================================================================
 
 function openAddLinkModal(groupId) {
   const container = document.createElement("div");
-  container.innerHTML = `
-    <div class="form-group">
-      <label class="form-label" for="newLinkName">${t("nameLabel")}</label>
-      <input type="text" id="newLinkName" class="form-input" placeholder="e.g. Frontend App" autofocus>
-      <span class="form-error-msg" id="linkNameError" style="display: none;"></span>
-    </div>
-    <div class="form-group">
-      <label class="form-label" for="newLinkUrl">${t("urlLabel")}</label>
-      <input type="url" id="newLinkUrl" class="form-input" placeholder="https://">
-      <span class="form-error-msg" id="linkUrlError" style="display: none;"></span>
-    </div>
-    <div class="form-group">
-      <label class="form-label">${t("badgeLabel")} (${t("optional")})</label>
-      <div class="badge-selector-row">
-        ${DEFAULT_BADGES.map((b) => `<button type="button" class="badge-preset-btn" data-badge="${b.label}">${b.label}</button>`).join("")}
-      </div>
-      <input type="text" id="customBadgeInput" class="form-input" style="margin-top: 6px;" placeholder="${t("customBadgePlaceholder")}">
-    </div>
-  `;
 
-  const nameInput = container.querySelector("#newLinkName");
-  const urlInput = container.querySelector("#newLinkUrl");
-  const customBadgeInput = container.querySelector("#customBadgeInput");
-  const presetBtns = container.querySelectorAll(".badge-preset-btn");
-  const nameError = container.querySelector("#linkNameError");
-  const urlError = container.querySelector("#linkUrlError");
+  // Name Field
+  const nameGroup = document.createElement("div");
+  nameGroup.className = "form-group";
+  const nameLabel = document.createElement("label");
+  nameLabel.className = "form-label";
+  nameLabel.htmlFor = "newLinkName";
+  nameLabel.textContent = t("nameLabel");
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.id = "newLinkName";
+  nameInput.className = "form-input";
+  nameInput.placeholder = "e.g. Frontend App";
+  const nameError = document.createElement("span");
+  nameError.className = "form-error-msg";
+  nameError.style.display = "none";
+  nameGroup.appendChild(nameLabel);
+  nameGroup.appendChild(nameInput);
+  nameGroup.appendChild(nameError);
+  container.appendChild(nameGroup);
 
-  presetBtns.forEach((btn) => {
+  // URL Field
+  const urlGroup = document.createElement("div");
+  urlGroup.className = "form-group";
+  const urlLabel = document.createElement("label");
+  urlLabel.className = "form-label";
+  urlLabel.htmlFor = "newLinkUrl";
+  urlLabel.textContent = t("urlLabel");
+  const urlInput = document.createElement("input");
+  urlInput.type = "url";
+  urlInput.id = "newLinkUrl";
+  urlInput.className = "form-input";
+  urlInput.placeholder = "https://";
+  const urlError = document.createElement("span");
+  urlError.className = "form-error-msg";
+  urlError.style.display = "none";
+  urlGroup.appendChild(urlLabel);
+  urlGroup.appendChild(urlInput);
+  urlGroup.appendChild(urlError);
+  container.appendChild(urlGroup);
+
+  // Badge Field
+  const badgeGroup = document.createElement("div");
+  badgeGroup.className = "form-group";
+  const badgeLabel = document.createElement("label");
+  badgeLabel.className = "form-label";
+  badgeLabel.textContent = `${t("badgeLabel")} (${t("optional")})`;
+  badgeGroup.appendChild(badgeLabel);
+
+  const presetRow = document.createElement("div");
+  presetRow.className = "badge-selector-row";
+
+  const customBadgeInput = document.createElement("input");
+  customBadgeInput.type = "text";
+  customBadgeInput.className = "form-input";
+  customBadgeInput.style.marginTop = "6px";
+  customBadgeInput.placeholder = t("customBadgePlaceholder");
+
+  DEFAULT_BADGES.forEach((b) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "badge-preset-btn";
+    btn.textContent = b.label;
     btn.addEventListener("click", () => {
-      const badge = btn.dataset.badge;
-      customBadgeInput.value = badge;
-      presetBtns.forEach((b) => b.classList.remove("selected"));
+      customBadgeInput.value = b.label;
+      presetRow.querySelectorAll(".badge-preset-btn").forEach((p) => p.classList.remove("selected"));
       btn.classList.add("selected");
     });
+    presetRow.appendChild(btn);
   });
+
+  badgeGroup.appendChild(presetRow);
+  badgeGroup.appendChild(customBadgeInput);
+  container.appendChild(badgeGroup);
 
   openModal(t("addLink"), container, async () => {
     let hasError = false;
@@ -746,50 +872,88 @@ function openAddLinkModal(groupId) {
     if (hasError) return false;
 
     await addLink(state.data, groupId, { name: nameVal, url: urlVal, badge: badgeVal });
-    render();
+    renderCategoryContent();
     return true;
   });
 }
 
 function openEditLinkModal(link) {
   const container = document.createElement("div");
-  container.innerHTML = `
-    <div class="form-group">
-      <label class="form-label" for="editLinkName">${t("nameLabel")}</label>
-      <input type="text" id="editLinkName" class="form-input" value="${link.name}" autofocus>
-      <span class="form-error-msg" id="editLinkNameError" style="display: none;"></span>
-    </div>
-    <div class="form-group">
-      <label class="form-label" for="editLinkUrl">${t("urlLabel")}</label>
-      <input type="url" id="editLinkUrl" class="form-input" value="${link.url}">
-      <span class="form-error-msg" id="editLinkUrlError" style="display: none;"></span>
-    </div>
-    <div class="form-group">
-      <label class="form-label">${t("badgeLabel")} (${t("optional")})</label>
-      <div class="badge-selector-row">
-        ${DEFAULT_BADGES.map(
-          (b) => `<button type="button" class="badge-preset-btn ${link.badge === b.label ? "selected" : ""}" data-badge="${b.label}">${b.label}</button>`
-        ).join("")}
-      </div>
-      <input type="text" id="editCustomBadgeInput" class="form-input" style="margin-top: 6px;" value="${link.badge || ""}" placeholder="${t("customBadgePlaceholder")}">
-    </div>
-  `;
 
-  const nameInput = container.querySelector("#editLinkName");
-  const urlInput = container.querySelector("#editLinkUrl");
-  const customBadgeInput = container.querySelector("#editCustomBadgeInput");
-  const presetBtns = container.querySelectorAll(".badge-preset-btn");
-  const nameError = container.querySelector("#editLinkNameError");
-  const urlError = container.querySelector("#editLinkUrlError");
+  // Name Field
+  const nameGroup = document.createElement("div");
+  nameGroup.className = "form-group";
+  const nameLabel = document.createElement("label");
+  nameLabel.className = "form-label";
+  nameLabel.htmlFor = "editLinkName";
+  nameLabel.textContent = t("nameLabel");
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.id = "editLinkName";
+  nameInput.className = "form-input";
+  nameInput.value = link.name; // Safe assignment
+  const nameError = document.createElement("span");
+  nameError.className = "form-error-msg";
+  nameError.style.display = "none";
+  nameGroup.appendChild(nameLabel);
+  nameGroup.appendChild(nameInput);
+  nameGroup.appendChild(nameError);
+  container.appendChild(nameGroup);
 
-  presetBtns.forEach((btn) => {
+  // URL Field
+  const urlGroup = document.createElement("div");
+  urlGroup.className = "form-group";
+  const urlLabel = document.createElement("label");
+  urlLabel.className = "form-label";
+  urlLabel.htmlFor = "editLinkUrl";
+  urlLabel.textContent = t("urlLabel");
+  const urlInput = document.createElement("input");
+  urlInput.type = "url";
+  urlInput.id = "editLinkUrl";
+  urlInput.className = "form-input";
+  urlInput.value = link.url; // Safe assignment
+  const urlError = document.createElement("span");
+  urlError.className = "form-error-msg";
+  urlError.style.display = "none";
+  urlGroup.appendChild(urlLabel);
+  urlGroup.appendChild(urlInput);
+  urlGroup.appendChild(urlError);
+  container.appendChild(urlGroup);
+
+  // Badge Field
+  const badgeGroup = document.createElement("div");
+  badgeGroup.className = "form-group";
+  const badgeLabel = document.createElement("label");
+  badgeLabel.className = "form-label";
+  badgeLabel.textContent = `${t("badgeLabel")} (${t("optional")})`;
+  badgeGroup.appendChild(badgeLabel);
+
+  const presetRow = document.createElement("div");
+  presetRow.className = "badge-selector-row";
+
+  const customBadgeInput = document.createElement("input");
+  customBadgeInput.type = "text";
+  customBadgeInput.className = "form-input";
+  customBadgeInput.style.marginTop = "6px";
+  customBadgeInput.value = link.badge || ""; // Safe assignment
+  customBadgeInput.placeholder = t("customBadgePlaceholder");
+
+  DEFAULT_BADGES.forEach((b) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `badge-preset-btn ${link.badge === b.label ? "selected" : ""}`;
+    btn.textContent = b.label;
     btn.addEventListener("click", () => {
-      const badge = btn.dataset.badge;
-      customBadgeInput.value = badge;
-      presetBtns.forEach((b) => b.classList.remove("selected"));
+      customBadgeInput.value = b.label;
+      presetRow.querySelectorAll(".badge-preset-btn").forEach((p) => p.classList.remove("selected"));
       btn.classList.add("selected");
     });
+    presetRow.appendChild(btn);
   });
+
+  badgeGroup.appendChild(presetRow);
+  badgeGroup.appendChild(customBadgeInput);
+  container.appendChild(badgeGroup);
 
   openModal(t("edit"), container, async () => {
     let hasError = false;
@@ -820,25 +984,22 @@ function openEditLinkModal(link) {
     if (hasError) return false;
 
     await editLink(state.data, link.id, { name: nameVal, url: urlVal, badge: badgeVal });
-    render();
+    renderCategoryContent();
     return true;
   });
 }
 
 function openDeleteLinkModal(link) {
   const container = document.createElement("div");
-  container.innerHTML = `
-    <div class="delete-impact-summary">
-      ${t("linkDeleteConfirm", link.name, link.url)}
-    </div>
-  `;
+  container.className = "delete-impact-summary";
+  container.textContent = t("linkDeleteConfirm", link.name, link.url); // Safe textContent
 
   openModal(
     t("deleteLinkTitle"),
     container,
     async () => {
       await deleteLink(state.data, link.id);
-      render();
+      renderCategoryContent();
       return true;
     },
     t("confirmDelete"),

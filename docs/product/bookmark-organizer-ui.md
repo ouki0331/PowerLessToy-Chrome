@@ -1,67 +1,205 @@
-# Bookmark Organizer UI/UX Design Guidelines
+# Bookmark Organizer UI/UX 设计指引
 
-Document Status: Implementation Constraints  
-Target Surface: Bookmark Organizer New Tab Workbench  
-Design Archetype: `Operate`  
-Source of Truth: [`bookmark-organizer.md`](bookmark-organizer.md)  
-Design Methodology: Impeccable 4.3.1
+文档状态：实现约束  
+适用界面：Bookmark Organizer 新标签页工作台  
+设计模式：`Operate`  
+产品事实来源：[`bookmark-organizer.md`](bookmark-organizer.md)  
+设计方法：Impeccable 4.3.1
 
-> This document defines visual standards, layout requirements, interactive states, and design constraints.
+> 本文定义实现 agent 必须遵守的界面质量、布局、交互和验收要求，不包含业务代码。产品行为与本文冲突时，以产品规格为准。
 
-## 1. Context & User Workflow
+## 1. 工作与用户场景
 
-Users open new tabs dozens of times daily to navigate project environments and corporate portals. The interface prioritizes rapid scanning and low cognitive friction.
+用户会在工作日反复打开新标签页，从几十个项目及公司工具中定位链接。界面首先服务高频扫描和快速打开，其次才是视觉表达。
 
-- Primary usage environment: Desktop Chrome, daytime office lighting.
-- Typical interaction duration: 2 to 5 seconds (open tab, scan category/group, launch link).
-- Scaling: Gracefully scales from 3 initial categories to dozens of groups and hundreds of links without horizontal page overflow.
+- 用户通常在桌面 Chrome、办公环境和正常室内光线下使用。
+- 典型操作持续几秒：打开新标签页、切换分类、识别项目、点击环境链接。
+- 内容会从少量链接增长到几十个项目，因此设计不能只在演示数据很少时成立。
+- 用户不应为了理解视觉创意而停下来；品牌感来自细节一致性、节奏和状态反馈。
 
-## 2. Visual Identity: Quiet Workbench
+成功标准：用户打开页面后能立即看出当前分类、项目分组和环境链接，并在不阅读说明的情况下完成打开操作。
 
-### Core Philosophy
+## 2. 选定方向：Quiet Workbench
 
-A focused, matte, digital workbench. Rejects distracting neon glows, glassmorphism, heavy gradients, or card clutter.
+### 设计主张
 
-### Visual Palette
+把新标签页做成一张安静、精确、长期耐看的数字工作台。它拒绝两种常见结果：一是无差别的白底卡片堆积，二是用发光渐变、玻璃拟态和大面积装饰掩盖信息结构。
 
-- Tone: Calm, light neutral surface (`#f8fafc` / `#ffffff`) with automatic dark mode support (`#090d16` / `#0f172a`).
-- Accent Color: Restrained Indigo (`#4f46e5` light / `#6366f1` dark), strictly used for active category, primary actions, and focus rings.
-- Borders: Crisp 1px solid dividers defining distinct structural surfaces.
-- Typography: System sans-serif stack (`-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`).
-- Icons: Functional glyphs only; no decorative illustration or random emoji mixing.
+### 视觉世界
 
-### Badges & Semantic Colors
+- 光线：以适合办公环境的浅色界面为首版基准；背景与工作台有轻微层级差，但不追求悬浮玻璃效果。
+- 色彩策略：`Restrained`。使用冷静中性色作为大部分界面，只保留一个稳定的蓝紫系强调色，用于当前分类、主要操作和焦点状态。
+- 材质：哑光页面、清晰边界、少量柔和阴影；层级主要靠空间、色阶和边框，不靠连续阴影。
+- 字体：使用可靠的系统无衬线字体栈；标题、标签、按钮和数据使用同一字体家族，以字重和间距建立层级。
+- 形状：适度圆角但不把所有内容变成胶囊。分类、按钮、卡片和输入框使用同一套几何语言。
+- 图标：只在能缩短识别时间时使用，采用同一图标体系；禁止混用 emoji、线性图标和实心图标。
 
-- `Local`: Subtle emerald green.
-- `Dev`: Subtle sky blue.
-- `Test`: Subtle warm amber.
-- `Prod`: Subtle purple/violet (Never warning red! Red is strictly reserved for destructive deletion actions and form errors).
-- Custom tags: Subtle neutral slate.
+### 记忆点
 
-## 3. Visual Hierarchy
+第一屏最明显的不是品牌大标题，而是“分类轨道 + 项目工作区”的结构：分类像工作台上的明确分区，项目分组形成稳定网格，环境链接在每个项目内部保持紧凑且可比较。
 
-Desktop first viewport hierarchy:
-1. Compact Top Bar: Brand title, workbench badge, language toggle, Manage Content toggle.
-2. Category Navigation Track: Horizontal tablist with distinct active tab indicator and "+ Add Category" button in manage mode.
-3. Active Category Header: Category name, group count, and "+ Add Group" button.
-4. Responsive Group Grid: Multi-column card layout displaying project cards and environment links.
+### 风险与控制
 
-## 4. Component States
+克制的工作界面容易变得普通。实现时必须通过精确的网格、统一的状态语言、可靠的键盘反馈和高质量空状态建立品质，而不是靠装饰补救。
 
-All interactive elements (tabs, buttons, cards, links, inputs) implement complete visual states:
-- `default`
-- `hover`
-- `focus-visible` (distinct, unclipped outline with 2px offset)
-- `active / pressed`
-- `disabled`
-- `error`
+## 3. 第一视口与信息层级
 
-## 5. Prohibited Visual Patterns
+桌面第一视口依次呈现：
 
-- Full-screen decorative gradients, neon glows, or frosted glassmorphism.
-- Random accent colors per card.
-- Excessive capsule / pill buttons across all components.
-- Hero marketing banners, weather widgets, or clock distractions.
-- Critical actions revealed only on hover.
-- Color as the sole differentiator for environment badges or error states.
-- Animations that delay interactive responsiveness (> 250ms).
+1. 紧凑顶栏：产品名、当前内容概览、进入管理状态的次要操作。
+2. 分类轨道：工作项目、公司管理、技术兴趣和未来新增分类。
+3. 当前分类标题与主要操作：名称、可选的内容统计、“新增分组”。
+4. 分组网格：在首屏尽可能展示多个真实项目分组，同时保持链接可读。
+
+不得加入占据大量高度但不帮助打开链接的欢迎 Hero、插画、励志文案、天气、时钟或统计图。
+
+## 4. 布局规则
+
+### 页面框架
+
+- 页面背景覆盖整个新标签页，工作台内容区在宽屏上保持可控阅读宽度并居中。
+- 工作台不是一个四周漂浮的大圆角卡片；顶栏、分类轨道和内容区应形成一个连续应用表面。
+- 顶部导航在页面滚动时应保持当前分类可识别，但不得遮挡大量内容。
+- 主内容使用响应式分组网格。宽屏多列、窗口变窄时减少列数，最终降为单列。
+- 不允许因为项目名称、URL 或分类数量增加而产生页面级横向滚动。
+
+### 内容密度
+
+设计必须同时适应以下范围：
+
+| 内容 | 最小 | 典型 | 压力范围 |
+| --- | ---: | ---: | ---: |
+| 分类 | 1 | 3–5 | 12 |
+| 当前分类分组 | 0 | 12–30 | 100 |
+| 每组链接 | 0 | 2–6 | 12 |
+| 项目名称 | 2 个字符 | 8–20 个字符 | 60 个字符 |
+| 链接名称 | 2 个字符 | 4–12 个字符 | 40 个字符 |
+
+- 长名称优先换行或安全截断，并提供完整名称的可访问方式。
+- 分类过多时允许分类轨道水平滚动，当前分类始终保持可见。
+- 分组卡片可以因内容数量略有不同，但同一行的视觉基线不能杂乱跳动。
+
+## 5. 核心组件
+
+### 分类轨道
+
+- 当前分类同时用形状/边界、字重和强调色表达，不能只改变文字颜色。
+- 键盘焦点与选中状态必须不同：焦点表示下一次键盘操作位置，选中表示当前内容来源。
+- 新增分类是清晰的次要操作，不能与已有分类看起来完全相同。
+- 分类名称很长时不能挤压管理操作或让轨道失去可用性。
+
+### 分组区块
+
+- 分组标题是首要扫描锚点；环境链接在标题下保持一致的排列节奏。
+- 组与组之间依靠稳定间距、边界和背景层级区分，不使用每张卡不同的随机颜色。
+- 默认浏览状态不展示大量编辑、删除图标；进入管理状态后再显示维护控件。
+- 空分组应说明“还没有链接”并提供新增入口，不展示四个假的环境占位。
+
+### 链接
+
+- 链接必须一眼可点击，并有明确的 hover、focus 和 active 状态。
+- 环境标识是辅助信息，链接名称仍然是主要文本。
+- 本地、开发、测试、生产可以使用低饱和度的差异色，但必须始终显示文字，不得只用颜色编码。
+- 生产环境不使用错误红色；红色保留给删除、校验失败和危险操作。
+- 链接点击目标应足够大，紧凑不等于难以点中。
+
+### 管理状态与表单
+
+- “浏览”和“管理”应有清晰状态差异，但切换后整体布局不应大幅跳动。
+- 优先使用内联或就地编辑；只有删除确认、复杂表单或必须阻断背景操作时使用对话框。
+- 同一种保存、取消、删除操作在分类、分组和链接管理中保持相同位置和视觉语义。
+- 表单错误显示在相关字段附近，保留用户输入，并将焦点移到第一个错误字段。
+- 删除确认必须突出对象名称和影响数量，危险操作与取消操作不能拥有相同视觉权重。
+
+## 6. 完整组件状态
+
+所有可交互组件必须覆盖：
+
+- default
+- hover
+- focus-visible
+- active/pressed
+- selected（适用时）
+- disabled
+- loading/saving
+- error
+
+焦点轮廓必须清晰、连续且不会被容器裁剪。不得通过移除浏览器焦点样式而不给出等价替代。
+
+## 7. 空、加载与失败状态
+
+### 首次使用
+
+在“工作项目”空状态中，用一段简短说明解释“先按项目建立分组，再添加环境链接”，并提供唯一突出的“新增第一个项目”操作。
+
+### 分类为空
+
+显示当前分类名称和新增分组操作，不显示通用“暂无数据”。公司管理与技术兴趣的空状态文案应使用各自语境。
+
+### 加载
+
+如果读取本地数据存在可感知等待，使用与真实分组结构相符的骨架状态；不在页面中央放置孤立转圈动画。
+
+### 失败
+
+- 数据读取失败：保留页面框架，说明数据尚未被覆盖，提供重试。
+- 保存失败：编辑内容保持可见，明确指出尚未保存，并提供重试或取消。
+- 导入校验失败（未来功能）：使用结果摘要和可定位问题列表，不只显示“导入失败”。
+
+## 8. 色彩与可访问性
+
+- 正文、次要文本、边界和交互状态都必须满足可读性，不使用过淡灰色表达必要信息。
+- 强调色只用于当前分类、主要操作、焦点和少量信息状态，不作为装饰散布。
+- 错误、警告、成功和信息使用稳定的语义色，并配合图标或文字。
+- 支持系统减少动态效果设置；减少后所有状态变化仍可理解。
+- 页面缩放至 200% 时，内容保持可访问且不出现功能丢失。
+- 键盘可完成分类切换、进入内容、打开链接以及管理表单操作。
+
+## 9. 动效与反馈
+
+- 常规状态变化保持快速，目标范围为 150–250ms。
+- 动效只说明状态变化：分类内容切换、保存反馈、区块新增或删除。
+- 不做页面加载编排、卡片依次飞入、循环背景动画或装饰性视差。
+- 切换分类时内容可以轻微淡化/位移，但不得延迟链接可操作时间。
+- 保存成功使用克制的就地反馈；失败反馈保持可见直到用户处理。
+
+## 10. 响应式规则
+
+- 首要目标是桌面 Chrome；验证常见 1280–1600px 宽度及更窄的窗口状态。
+- 窗口变窄时，分组网格依次减少列数，顶部操作可折叠但不能消失。
+- 分类轨道优先水平滚动，不把多个分类压缩成不可读文字。
+- 极窄宽度使用单列内容，表单和确认界面不应超出视口。
+- 不使用随视口连续缩放的标题字体；通过结构断点改变布局。
+
+## 11. 明确禁止的视觉模式
+
+- 大面积渐变、霓虹发光、玻璃拟态或透明层叠。
+- 每张项目卡使用随机强调色。
+- 全页面到处使用胶囊形状。
+- 用 emoji 充当正式功能图标。
+- 巨大品牌标题、营销 Hero、插画或不服务任务的装饰。
+- 自定义滚动条、非标准表单控件或需要学习的新奇交互。
+- 只在 hover 时才出现的关键操作或信息。
+- 只用颜色区分环境、选中、错误或焦点。
+- 因动画而延迟页面首次可用。
+
+## 12. 实现与审查交接
+
+实现 agent 必须：
+
+1. 先阅读产品规格和本文，不得只依据 README 的摘要实现。
+2. 在实现 UI 时使用已安装的 Impeccable 技能，并按 `Operate` 模式执行。
+3. 使用真实压力数据验证大量分类、分组、长名称和不完整环境组合。
+4. 同时检查浏览状态、管理状态、空状态、保存失败和读取失败。
+5. 提供桌面宽屏与窄窗口截图，证明布局和状态质量。
+6. 保留浏览器原生链接行为和完整键盘访问能力。
+
+代码审查时至少检查：
+
+- 第一视口是否立即体现分类、项目和环境层级。
+- 大量项目下是否仍易扫描，是否出现横向溢出或卡片高度混乱。
+- 交互组件是否具备完整状态并使用一致的视觉词汇。
+- Tab 分类切换与普通焦点导航是否都满足产品规格。
+- 管理操作是否克制、危险操作是否有正确确认层级。
+- UI 是否避开本文禁止模式，并达到“工作工具但不粗糙”的质量标准。
+
