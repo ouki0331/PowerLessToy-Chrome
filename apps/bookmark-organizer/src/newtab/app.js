@@ -37,6 +37,15 @@ import {
   getBackupFilename
 } from "./import-export.js";
 
+import {
+  initTheme,
+  setThemeMode,
+  getThemeMode,
+  getResolvedTheme,
+  getAutoInfo,
+  onThemeChange
+} from "./theme.js";
+
 import { handleCategoryKeydown, handleModalKeydown } from "./keyboard.js";
 import { DEFAULT_BADGES } from "./constants.js";
 import { t, getLanguage, setLanguage } from "./i18n.js";
@@ -46,61 +55,71 @@ let state = {
   data: null,
   isManageMode: false,
   activeModal: null,
-  lastImportJobId: null
+  lastImportJobId: null,
+  expandedLinks: new Map() // groupId -> linkId (VIEW-LINK-001)
 };
 
 // DOM References
+const el = (id) => (typeof document !== "undefined" && document.getElementById ? document.getElementById(id) : null);
 const elements = {
-  brandTitle: document.getElementById("appBrandTitle"),
-  tagline: document.getElementById("appTagline"),
-  categoryTabs: document.getElementById("categoryTabs"),
-  addCategoryBtn: document.getElementById("addCategoryBtn"),
-  activeCatTitle: document.getElementById("activeCatTitle"),
-  catStatsLabel: document.getElementById("catStatsLabel"),
-  catAdminButtons: document.getElementById("catAdminButtons"),
-  renameCatBtn: document.getElementById("renameCatBtn"),
-  deleteCatBtn: document.getElementById("deleteCatBtn"),
-  addGroupBtn: document.getElementById("addGroupBtn"),
-  groupGrid: document.getElementById("groupGrid"),
-  categoryEmptyState: document.getElementById("categoryEmptyState"),
-  emptyCatTitle: document.getElementById("emptyCatTitle"),
-  emptyCatLead: document.getElementById("emptyCatLead"),
-  createFirstGroupBtn: document.getElementById("createFirstGroupBtn"),
-  toggleManageBtn: document.getElementById("toggleManageBtn"),
-  manageIndicator: document.getElementById("manageIndicator"),
-  manageBtnText: document.getElementById("manageBtnText"),
-  langToggleBtn: document.getElementById("langToggleBtn"),
-  currentLangLabel: document.getElementById("currentLangLabel"),
-  errorBanner: document.getElementById("errorBanner"),
-  errorTitle: document.getElementById("errorTitle"),
-  errorDesc: document.getElementById("errorDesc"),
-  retryLoadBtn: document.getElementById("retryLoadBtn"),
-  modalContainer: document.getElementById("modalContainer"),
+  get brandTitle() { return el("appBrandTitle"); },
+  get tagline() { return el("appTagline"); },
+  get categoryTabs() { return el("categoryTabs"); },
+  get addCategoryBtn() { return el("addCategoryBtn"); },
+  get activeCatTitle() { return el("activeCatTitle"); },
+  get catStatsLabel() { return el("catStatsLabel"); },
+  get catAdminButtons() { return el("catAdminButtons"); },
+  get renameCatBtn() { return el("renameCatBtn"); },
+  get deleteCatBtn() { return el("deleteCatBtn"); },
+  get addGroupBtn() { return el("addGroupBtn"); },
+  get groupGrid() { return el("groupGrid"); },
+  get categoryEmptyState() { return el("categoryEmptyState"); },
+  get emptyCatTitle() { return el("emptyCatTitle"); },
+  get emptyCatLead() { return el("emptyCatLead"); },
+  get createFirstGroupBtn() { return el("createFirstGroupBtn"); },
+  get toggleManageBtn() { return el("toggleManageBtn"); },
+  get manageIndicator() { return el("manageIndicator"); },
+  get manageBtnText() { return el("manageBtnText"); },
+  get langToggleBtn() { return el("langToggleBtn"); },
+  get currentLangLabel() { return el("currentLangLabel"); },
+  get themeToggleBtn() { return el("themeToggleBtn"); },
+  get themeBtnIcon() { return el("themeBtnIcon"); },
+  get themeBtnText() { return el("themeBtnText"); },
+  get errorBanner() { return el("errorBanner"); },
+  get errorTitle() { return el("errorTitle"); },
+  get errorDesc() { return el("errorDesc"); },
+  get retryLoadBtn() { return el("retryLoadBtn"); },
+  get modalContainer() { return el("modalContainer"); },
 
   // Import / Export Elements
-  importJsonBtn: document.getElementById("importJsonBtn"),
-  importBtnText: document.getElementById("importBtnText"),
-  exportBackupBtn: document.getElementById("exportBackupBtn"),
-  exportBtnText: document.getElementById("exportBtnText"),
-  importFileInput: document.getElementById("importFileInput"),
-  undoBanner: document.getElementById("undoBanner"),
-  undoBannerText: document.getElementById("undoBannerText"),
-  undoImportBtn: document.getElementById("undoImportBtn"),
-  dismissUndoBtn: document.getElementById("dismissUndoBtn")
+  get importJsonBtn() { return el("importJsonBtn"); },
+  get importBtnText() { return el("importBtnText"); },
+  get exportBackupBtn() { return el("exportBackupBtn"); },
+  get exportBtnText() { return el("exportBtnText"); },
+  get importFileInput() { return el("importFileInput"); },
+  get undoBanner() { return el("undoBanner"); },
+  get undoBannerText() { return el("undoBannerText"); },
+  get undoImportBtn() { return el("undoImportBtn"); },
+  get dismissUndoBtn() { return el("dismissUndoBtn"); }
 };
 
 // Initialize Application
-document.addEventListener("DOMContentLoaded", async () => {
+if (typeof document !== "undefined" && document.addEventListener) {
+  document.addEventListener("DOMContentLoaded", async () => {
   const savedLang = localStorage.getItem("powerless_toy_lang");
   if (savedLang) {
     setLanguage(savedLang);
   }
+  await initTheme();
   updateI18nLabels();
+  updateThemeButtonUI();
+  onThemeChange(() => updateThemeButtonUI());
 
   setupEventListeners();
   setupStorageSubscription();
   await initWorkbench();
-});
+  });
+}
 
 function updateI18nLabels() {
   const lang = getLanguage();
@@ -121,6 +140,7 @@ function updateI18nLabels() {
   if (elements.importBtnText) elements.importBtnText.textContent = t("importBtn");
   if (elements.exportBtnText) elements.exportBtnText.textContent = t("exportBtn");
   if (elements.undoImportBtn) elements.undoImportBtn.textContent = t("undoImportBtn");
+  updateThemeButtonUI();
 }
 
 async function initWorkbench() {
@@ -183,6 +203,11 @@ function setupEventListeners() {
     elements.manageIndicator.style.display = state.isManageMode ? "inline-block" : "none";
     elements.manageBtnText.textContent = state.isManageMode ? t("doneManaging") : t("manageMode");
     renderAll(false);
+  });
+
+  // Theme Selector Button
+  elements.themeToggleBtn?.addEventListener("click", () => {
+    openThemeModal();
   });
 
   // Export Backup Button
@@ -251,6 +276,162 @@ function setupEventListeners() {
       });
     }
   });
+}
+
+// ==========================================================================
+// Theme UI Controller (VIEW-THEME-001 & VIEW-THEME-002)
+// ==========================================================================
+
+function updateThemeButtonUI() {
+  if (!elements.themeToggleBtn) return;
+  const mode = getThemeMode();
+  const resolved = getResolvedTheme();
+  const autoInfo = getAutoInfo();
+
+  let icon = "🌓";
+  let text = t("themeLabel");
+  let tooltip = t("themeLabel");
+
+  if (mode === "light") {
+    icon = "☀️";
+    text = t("themeLight");
+    tooltip = `${t("themeLabel")}: ${t("themeLight")}`;
+  } else if (mode === "dark") {
+    icon = "🌙";
+    text = t("themeDark");
+    tooltip = `${t("themeLabel")}: ${t("themeDark")}`;
+  } else if (mode === "system") {
+    icon = "💻";
+    const sub = resolved === "dark" ? t("themeDark") : t("themeLight");
+    text = `${t("themeSystem")} (${sub})`;
+    tooltip = `${t("themeLabel")}: ${t("themeSystem")}`;
+  } else if (mode === "auto") {
+    icon = "🌅";
+    if (autoInfo) {
+      const currentScheme = autoInfo.resolvedTheme === "dark" ? t("themeDark") : t("themeLight");
+      const transType = autoInfo.nextTransitionType === "sunrise" ? t("sunriseText") : t("sunsetText");
+      text = `${currentScheme}`;
+      tooltip = `${t("themeAuto")}: ${currentScheme} · ${t(
+        "nextTransitionLabel",
+        transType,
+        autoInfo.nextTransitionTimeStr
+      )}`;
+    } else {
+      text = t("themeAuto");
+      tooltip = `${t("themeLabel")}: ${t("themeAuto")}`;
+    }
+  }
+
+  if (elements.themeBtnIcon) elements.themeBtnIcon.textContent = icon;
+  if (elements.themeBtnText) elements.themeBtnText.textContent = text;
+  elements.themeToggleBtn.title = tooltip;
+}
+
+function openThemeModal() {
+  const container = document.createElement("div");
+  container.className = "theme-options-list";
+
+  const currentMode = getThemeMode();
+  const autoInfo = getAutoInfo();
+
+  const options = [
+    {
+      key: "system",
+      title: t("themeSystem"),
+      desc: "Automatically match your operating system theme.",
+      icon: "💻"
+    },
+    {
+      key: "light",
+      title: t("themeLight"),
+      desc: "Bright, focused workbench suitable for daytime work.",
+      icon: "☀️"
+    },
+    {
+      key: "dark",
+      title: t("themeDark"),
+      desc: "High-contrast dark surface suitable for low light.",
+      icon: "🌙"
+    },
+    {
+      key: "auto",
+      title: t("themeAuto"),
+      desc: "Calculate local sunrise and sunset to switch automatically.",
+      icon: "🌅",
+      badge: autoInfo
+        ? `${autoInfo.resolvedTheme === "dark" ? t("themeDark") : t("themeLight")} · ${t(
+            "nextTransitionLabel",
+            autoInfo.nextTransitionType === "sunrise" ? t("sunriseText") : t("sunsetText"),
+            autoInfo.nextTransitionTimeStr
+          )}`
+        : null
+    }
+  ];
+
+  options.forEach((opt) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `theme-option-btn ${currentMode === opt.key ? "selected" : ""}`;
+    btn.setAttribute("role", "button");
+    btn.setAttribute("aria-pressed", currentMode === opt.key ? "true" : "false");
+
+    const left = document.createElement("div");
+    left.className = "theme-option-main";
+
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "theme-option-icon";
+    iconSpan.textContent = opt.icon;
+    left.appendChild(iconSpan);
+
+    const textCol = document.createElement("div");
+    textCol.className = "theme-option-text";
+
+    const titleEl = document.createElement("span");
+    titleEl.className = "theme-option-title";
+    titleEl.textContent = opt.title;
+    textCol.appendChild(titleEl);
+
+    const descEl = document.createElement("span");
+    descEl.className = "theme-option-desc";
+    descEl.textContent = opt.desc;
+    textCol.appendChild(descEl);
+
+    left.appendChild(textCol);
+    btn.appendChild(left);
+
+    if (opt.badge) {
+      const badgeEl = document.createElement("span");
+      badgeEl.className = "theme-info-badge";
+      badgeEl.textContent = opt.badge;
+      btn.appendChild(badgeEl);
+    }
+
+    btn.addEventListener("click", async () => {
+      closeModal();
+      const res = await setThemeMode(opt.key);
+      updateThemeButtonUI();
+      if (res.notice) {
+        showThemeNotice(res.notice);
+      }
+    });
+
+    container.appendChild(btn);
+  });
+
+  openModal(t("themeTitle"), container, () => true, "Close");
+}
+
+function showThemeNotice(message) {
+  if (elements.errorBanner && elements.errorDesc) {
+    elements.errorTitle.textContent = t("themeLabel");
+    elements.errorDesc.textContent = message;
+    elements.errorBanner.style.display = "flex";
+    setTimeout(() => {
+      if (elements.errorTitle.textContent === t("themeLabel")) {
+        elements.errorBanner.style.display = "none";
+      }
+    }, 6000);
+  }
 }
 
 // ==========================================================================
@@ -688,6 +869,8 @@ function renderGroups() {
 function createGroupCard(group) {
   const card = document.createElement("section");
   card.className = "group-card";
+  card.id = `group-card-${group.id}`;
+  card.dataset.groupId = group.id;
   card.setAttribute("aria-labelledby", `group-title-${group.id}`);
 
   // Card Header
@@ -759,7 +942,7 @@ function createGroupCard(group) {
     list.className = "link-list";
 
     groupLinks.forEach((link) => {
-      const linkItem = createLinkItem(link);
+      const linkItem = createLinkItem(link, group);
       list.appendChild(linkItem);
     });
 
@@ -770,10 +953,118 @@ function createGroupCard(group) {
   return card;
 }
 
-function createLinkItem(link) {
+function getDomainInitial(hostname) {
+  if (!hostname) return "?";
+  let clean = String(hostname).trim();
+  try {
+    if (clean.includes("://")) {
+      clean = new URL(clean).hostname;
+    }
+  } catch {
+    // Ignore URL parse error
+  }
+  clean = clean.replace(/^www\./i, "");
+  const match = clean.match(/[a-zA-Z0-9]/);
+  return match ? match[0].toUpperCase() : (clean.charAt(0).toUpperCase() || "?");
+}
+
+/**
+ * On-demand favicon loader (VIEW-LINK-001)
+ * Strictly local origin request; never uses 3rd-party aggregators.
+ */
+function loadFaviconOnDemand(detailsPanel, url) {
+  const container = detailsPanel.querySelector(".link-favicon-container");
+  if (!container || container.dataset.loaded === "true") return;
+  container.dataset.loaded = "true";
+
+  try {
+    const origin = new URL(url).origin;
+    if (!origin || origin === "null") return;
+    const faviconUrl = `${origin}/favicon.ico`;
+    const img = document.createElement("img");
+    img.className = "link-favicon-img";
+    img.alt = "";
+    img.width = 18;
+    img.height = 18;
+    img.style.display = "none";
+    img.onload = () => {
+      img.style.display = "inline-block";
+      const placeholder = container.querySelector(".link-favicon-placeholder");
+      if (placeholder) placeholder.style.display = "none";
+    };
+    img.onerror = () => {
+      // Leave domain initial placeholder cleanly displayed
+      img.remove();
+    };
+    img.src = faviconUrl;
+    container.appendChild(img);
+  } catch {
+    // Keep placeholder on invalid URL
+  }
+}
+
+/**
+ * Updates link items expand state in-place to preserve keyboard focus.
+ */
+function updateGroupLinksExpandState(groupId) {
+  const groupCard =
+    document.getElementById(`group-card-${groupId}`) ||
+    elements.groupGrid?.querySelector(`[data-group-id="${groupId}"]`);
+  if (!groupCard) return;
+
+  const currentExpandedId = state.expandedLinks.get(groupId);
+  const items = groupCard.querySelectorAll(".link-item");
+
+  items.forEach((item) => {
+    const linkId = item.dataset.linkId;
+    const expandBtn = item.querySelector(".link-expand-btn");
+    const detailsPanel = item.querySelector(".link-details-panel");
+    const linkAnchor = item.querySelector(".link-anchor");
+    const linkName = item.querySelector(".link-name")?.textContent || "";
+
+    const isThisExpanded = linkId === currentExpandedId;
+
+    if (expandBtn) {
+      expandBtn.setAttribute("aria-expanded", isThisExpanded ? "true" : "false");
+      expandBtn.setAttribute(
+        "aria-label",
+        isThisExpanded ? t("collapseDetailsFor", linkName) : t("expandDetailsFor", linkName)
+      );
+      expandBtn.title = isThisExpanded ? t("collapseDetails") : t("expandDetails");
+    }
+
+    if (detailsPanel) {
+      if (isThisExpanded) {
+        detailsPanel.classList.add("is-expanded");
+        if (linkAnchor && linkAnchor.href) {
+          loadFaviconOnDemand(detailsPanel, linkAnchor.href);
+        }
+      } else {
+        detailsPanel.classList.remove("is-expanded");
+      }
+    }
+  });
+}
+
+function createLinkItem(link, group) {
   const item = document.createElement("li");
   item.className = "link-item";
+  item.dataset.linkId = link.id;
 
+  const isExpanded = state.expandedLinks.get(group.id) === link.id;
+
+  let hostname = "";
+  try {
+    hostname = new URL(link.url).hostname;
+  } catch {
+    hostname = link.url;
+  }
+
+  // Row Container
+  const row = document.createElement("div");
+  row.className = "link-row";
+
+  // Anchor
   const anchor = document.createElement("a");
   anchor.className = "link-anchor";
   anchor.href = link.url;
@@ -815,7 +1106,46 @@ function createLinkItem(link) {
     window.location.href = link.url;
   });
 
-  item.appendChild(anchor);
+  row.appendChild(anchor);
+
+  // Actions Container (Expand Button & Manage Actions)
+  const actionsContainer = document.createElement("div");
+  actionsContainer.className = "link-actions-container";
+
+  // Expand / Collapse button
+  const expandBtn = document.createElement("button");
+  expandBtn.type = "button";
+  expandBtn.className = "link-expand-btn";
+  expandBtn.id = `link-expand-btn-${link.id}`;
+  expandBtn.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+  expandBtn.setAttribute("aria-controls", `link-details-${link.id}`);
+  expandBtn.setAttribute(
+    "aria-label",
+    isExpanded ? t("collapseDetailsFor", link.name) : t("expandDetailsFor", link.name)
+  );
+  expandBtn.title = isExpanded ? t("collapseDetails") : t("expandDetails");
+
+  expandBtn.innerHTML = `
+    <svg class="expand-chevron" viewBox="0 0 20 20" aria-hidden="true" width="14" height="14">
+      <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" fill="currentColor"/>
+    </svg>
+  `;
+
+  expandBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const currentlyExpandedLinkId = state.expandedLinks.get(group.id);
+    if (currentlyExpandedLinkId === link.id) {
+      state.expandedLinks.delete(group.id);
+    } else {
+      state.expandedLinks.set(group.id, link.id);
+    }
+
+    updateGroupLinksExpandState(group.id);
+  });
+
+  actionsContainer.appendChild(expandBtn);
 
   if (state.isManageMode) {
     const actions = document.createElement("div");
@@ -837,9 +1167,86 @@ function createLinkItem(link) {
 
     actions.appendChild(editBtn);
     actions.appendChild(deleteBtn);
-    item.appendChild(actions);
+    actionsContainer.appendChild(actions);
   }
 
+  row.appendChild(actionsContainer);
+  item.appendChild(row);
+
+  // Expandable Details Panel
+  const detailsPanel = document.createElement("div");
+  detailsPanel.id = `link-details-${link.id}`;
+  detailsPanel.className = `link-details-panel ${isExpanded ? "is-expanded" : ""}`;
+  detailsPanel.setAttribute("role", "region");
+  detailsPanel.setAttribute("aria-label", `Details for ${link.name}`);
+
+  // Header with Favicon + Hostname
+  const detailHeader = document.createElement("div");
+  detailHeader.className = "link-detail-header";
+
+  const faviconContainer = document.createElement("div");
+  faviconContainer.className = "link-favicon-container";
+
+  const placeholder = document.createElement("div");
+  placeholder.className = "link-favicon-placeholder";
+  placeholder.textContent = getDomainInitial(hostname);
+  faviconContainer.appendChild(placeholder);
+
+  detailHeader.appendChild(faviconContainer);
+
+  const hostSpan = document.createElement("span");
+  hostSpan.className = "link-detail-host";
+  hostSpan.textContent = hostname;
+  detailHeader.appendChild(hostSpan);
+
+  detailsPanel.appendChild(detailHeader);
+
+  // Full URL row
+  const urlRow = document.createElement("div");
+  urlRow.className = "link-detail-row";
+
+  const urlLabel = document.createElement("span");
+  urlLabel.className = "link-detail-label";
+  urlLabel.textContent = t("fullUrlLabel");
+  urlRow.appendChild(urlLabel);
+
+  const urlVal = document.createElement("a");
+  urlVal.className = "link-detail-url";
+  urlVal.href = link.url;
+  urlVal.target = "_blank";
+  urlVal.rel = "noopener noreferrer";
+  urlVal.textContent = link.url;
+  urlRow.appendChild(urlVal);
+
+  detailsPanel.appendChild(urlRow);
+
+  // Environment / Tag row (if present)
+  if (link.badge) {
+    const badgeRow = document.createElement("div");
+    badgeRow.className = "link-detail-row";
+
+    const badgeLabel = document.createElement("span");
+    badgeLabel.className = "link-detail-label";
+    badgeLabel.textContent = t("badgeLabel");
+    badgeRow.appendChild(badgeLabel);
+
+    const badgeVal = document.createElement("span");
+    const lowerBadge = link.badge.toLowerCase();
+    const isStandardBadge = ["local", "dev", "test", "prod"].includes(lowerBadge);
+    badgeVal.className = `link-badge ${isStandardBadge ? `badge-${lowerBadge}` : "badge-custom"}`;
+    badgeVal.textContent = link.badge;
+    badgeVal.style.alignSelf = "flex-start";
+    badgeRow.appendChild(badgeVal);
+
+    detailsPanel.appendChild(badgeRow);
+  }
+
+  // Load favicon if already expanded
+  if (isExpanded) {
+    loadFaviconOnDemand(detailsPanel, link.url);
+  }
+
+  item.appendChild(detailsPanel);
   return item;
 }
 
@@ -1467,3 +1874,14 @@ function openDeleteLinkModal(link) {
     true
   );
 }
+
+export {
+  state,
+  elements,
+  getDomainInitial,
+  loadFaviconOnDemand,
+  createGroupCard,
+  createLinkItem,
+  updateGroupLinksExpandState,
+  initWorkbench
+};

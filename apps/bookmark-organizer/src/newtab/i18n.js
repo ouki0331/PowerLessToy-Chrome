@@ -78,7 +78,28 @@ const translations = {
     undoBlockedMsg:
       "Some imported items were edited or new items were added inside them. Automatic undo was blocked to prevent data loss or orphan records. You may restore the pre-import snapshot instead (which will discard changes made after the import).",
     restoreSnapshotConfirmBtn: "Restore Pre-Import Snapshot",
-    previewStaleNotice: "Bookmarks changed in another tab while previewing. The preview has been refreshed with the latest data."
+    previewStaleNotice: "Bookmarks changed in another tab while previewing. The preview has been refreshed with the latest data.",
+
+    // Link Details & Visual Enhancements (VIEW-LINK-001)
+    expandDetails: "View Details",
+    collapseDetails: "Collapse Details",
+    expandDetailsFor: (name) => `View details for ${name}`,
+    collapseDetailsFor: (name) => `Collapse details for ${name}`,
+    hostnameLabel: "Host",
+    fullUrlLabel: "Full URL",
+
+    // Theme (VIEW-THEME-001 & VIEW-THEME-002)
+    themeLabel: "Theme",
+    themeTitle: "Theme Settings",
+    themeSystem: "System",
+    themeLight: "Light",
+    themeDark: "Dark",
+    themeAuto: "Sunrise / Sunset",
+    nextTransitionLabel: (type, time) => `${type} at ${time}`,
+    sunriseText: "Sunrise",
+    sunsetText: "Sunset",
+    geoDeniedNotice: "Location permission was denied. Switched to System theme.",
+    geoFailedNotice: "Could not access location. Switched to System theme."
   },
   ja: {
     appTitle: "Bookmark Organizer",
@@ -154,7 +175,28 @@ const translations = {
     undoBlockedMsg:
       "インポートされた項目が編集されたか、その中に新しい項目が追加されています。データ消失や孤立リンクを防ぐため自動削除を停止しました。インポート前のスナップショットから復元することも可能です（インポート後の変更は破棄されます）。",
     restoreSnapshotConfirmBtn: "インポート前のスナップショットを復元",
-    previewStaleNotice: "プレビュー中に別のタブでデータが変更されたため、最新データでプレビューを更新しました。"
+    previewStaleNotice: "プレビュー中に別のタブでデータが変更されたため、最新データでプレビューを更新しました。",
+
+    // Link Details & Visual Enhancements (VIEW-LINK-001)
+    expandDetails: "詳細を見る",
+    collapseDetails: "詳細を閉じる",
+    expandDetailsFor: (name) => `「${name}」の詳細を見る`,
+    collapseDetailsFor: (name) => `「${name}」の詳細を閉じる`,
+    hostnameLabel: "ホスト",
+    fullUrlLabel: "URL全体",
+
+    // Theme (VIEW-THEME-001 & VIEW-THEME-002)
+    themeLabel: "テーマ",
+    themeTitle: "テーマ設定",
+    themeSystem: "システム設定",
+    themeLight: "ライト",
+    themeDark: "ダーク",
+    themeAuto: "日出・日没に合わせる",
+    nextTransitionLabel: (type, time) => `${time} に${type}`,
+    sunriseText: "日の出",
+    sunsetText: "日没",
+    geoDeniedNotice: "位置情報へのアクセスが拒否されたため、システム設定モードに戻しました。",
+    geoFailedNotice: "位置情報を取得できなかったため、システム設定モードに戻しました。"
   }
 };
 

@@ -4,6 +4,9 @@
 
 export const STORAGE_KEY = "powerless_toy_bookmarks_v1";
 export const ACTIVE_CAT_KEY = "powerless_toy_active_category_v1";
+export const THEME_MODE_KEY = "powerless_toy_theme_mode";
+export const CACHED_GEO_KEY = "powerless_toy_cached_geo";
+export const DEFAULT_THEME_MODE = "system";
 
 export const DEFAULT_BADGES = [
   { id: "local", label: "Local", colorClass: "badge-local" },

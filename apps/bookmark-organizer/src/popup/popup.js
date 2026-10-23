@@ -18,10 +18,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   openNewTabBtn?.addEventListener("click", () => {
+    const newTabUrl =
+      typeof chrome !== "undefined" && chrome.runtime?.getURL
+        ? chrome.runtime.getURL("src/newtab/index.html")
+        : typeof browser !== "undefined" && browser.runtime?.getURL
+          ? browser.runtime.getURL("src/newtab/index.html")
+          : "../newtab/index.html";
+
     if (typeof chrome !== "undefined" && chrome.tabs?.create) {
-      chrome.tabs.create({ url: "chrome://newtab" });
+      chrome.tabs.create({ url: newTabUrl });
+    } else if (typeof browser !== "undefined" && browser.tabs?.create) {
+      browser.tabs.create({ url: newTabUrl });
     } else {
-      window.open("../newtab/index.html", "_blank");
+      window.open(newTabUrl, "_blank");
     }
   });
 });
