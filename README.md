@@ -38,6 +38,10 @@ Each extension follows Manifest V3 with the standard directory layers:
 
 All new extensions follow the directory layout, naming rules, permission principles, and checklists defined in [`apps/README.md`](apps/README.md).
 
+## Agent Work Instructions
+
+- [ブックマーク整理・インポート JSON 生成 Agent 指示書（日本語）](docs/agent-prompts/bookmark-classification-ja.md)
+
 ## Local Verification
 
 Run workspace consistency checks:
