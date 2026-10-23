@@ -49,6 +49,7 @@ import {
 import { handleCategoryKeydown, handleModalKeydown } from "./keyboard.js";
 import { DEFAULT_BADGES } from "./constants.js";
 import { t, getLanguage, setLanguage } from "./i18n.js";
+import { SVG_ICONS, renderSvgIcon } from "./icons.js";
 
 // Application State
 let state = {
@@ -288,25 +289,25 @@ function updateThemeButtonUI() {
   const resolved = getResolvedTheme();
   const autoInfo = getAutoInfo();
 
-  let icon = "🌓";
+  let icon = SVG_ICONS.themeSystem;
   let text = t("themeLabel");
   let tooltip = t("themeLabel");
 
   if (mode === "light") {
-    icon = "☀️";
+    icon = SVG_ICONS.themeLight;
     text = t("themeLight");
     tooltip = `${t("themeLabel")}: ${t("themeLight")}`;
   } else if (mode === "dark") {
-    icon = "🌙";
+    icon = SVG_ICONS.themeDark;
     text = t("themeDark");
     tooltip = `${t("themeLabel")}: ${t("themeDark")}`;
   } else if (mode === "system") {
-    icon = "💻";
+    icon = SVG_ICONS.themeSystem;
     const sub = resolved === "dark" ? t("themeDark") : t("themeLight");
     text = `${t("themeSystem")} (${sub})`;
     tooltip = `${t("themeLabel")}: ${t("themeSystem")}`;
   } else if (mode === "auto") {
-    icon = "🌅";
+    icon = SVG_ICONS.themeAuto;
     if (autoInfo) {
       const currentScheme = autoInfo.resolvedTheme === "dark" ? t("themeDark") : t("themeLight");
       const transType = autoInfo.nextTransitionType === "sunrise" ? t("sunriseText") : t("sunsetText");
@@ -322,7 +323,7 @@ function updateThemeButtonUI() {
     }
   }
 
-  if (elements.themeBtnIcon) elements.themeBtnIcon.textContent = icon;
+  if (elements.themeBtnIcon) renderSvgIcon(elements.themeBtnIcon, icon);
   if (elements.themeBtnText) elements.themeBtnText.textContent = text;
   elements.themeToggleBtn.title = tooltip;
 }
@@ -339,25 +340,25 @@ function openThemeModal() {
       key: "system",
       title: t("themeSystem"),
       desc: "Automatically match your operating system theme.",
-      icon: "💻"
+      icon: SVG_ICONS.themeSystem
     },
     {
       key: "light",
       title: t("themeLight"),
       desc: "Bright, focused workbench suitable for daytime work.",
-      icon: "☀️"
+      icon: SVG_ICONS.themeLight
     },
     {
       key: "dark",
       title: t("themeDark"),
       desc: "High-contrast dark surface suitable for low light.",
-      icon: "🌙"
+      icon: SVG_ICONS.themeDark
     },
     {
       key: "auto",
       title: t("themeAuto"),
       desc: "Calculate local sunrise and sunset to switch automatically.",
-      icon: "🌅",
+      icon: SVG_ICONS.themeAuto,
       badge: autoInfo
         ? `${autoInfo.resolvedTheme === "dark" ? t("themeDark") : t("themeLight")} · ${t(
             "nextTransitionLabel",
@@ -380,7 +381,7 @@ function openThemeModal() {
 
     const iconSpan = document.createElement("span");
     iconSpan.className = "theme-option-icon";
-    iconSpan.textContent = opt.icon;
+    renderSvgIcon(iconSpan, opt.icon);
     left.appendChild(iconSpan);
 
     const textCol = document.createElement("div");
@@ -895,14 +896,14 @@ function createGroupCard(group) {
 
     const renameBtn = document.createElement("button");
     renameBtn.className = "btn-icon";
-    renameBtn.textContent = "✏️";
+    renderSvgIcon(renameBtn, SVG_ICONS.edit);
     renameBtn.title = t("rename");
     renameBtn.setAttribute("aria-label", `${t("rename")} ${group.name}`);
     renameBtn.addEventListener("click", () => openRenameGroupModal(group));
 
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "btn-icon danger";
-    deleteBtn.textContent = "🗑️";
+    renderSvgIcon(deleteBtn, SVG_ICONS.trash);
     deleteBtn.title = t("delete");
     deleteBtn.setAttribute("aria-label", `${t("delete")} ${group.name}`);
     deleteBtn.addEventListener("click", () => openDeleteGroupModal(group));
@@ -1153,14 +1154,14 @@ function createLinkItem(link, group) {
 
     const editBtn = document.createElement("button");
     editBtn.className = "btn-icon";
-    editBtn.textContent = "✏️";
+    renderSvgIcon(editBtn, SVG_ICONS.edit);
     editBtn.title = t("edit");
     editBtn.setAttribute("aria-label", `${t("edit")} ${link.name}`);
     editBtn.addEventListener("click", () => openEditLinkModal(link));
 
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "btn-icon danger";
-    deleteBtn.textContent = "🗑️";
+    renderSvgIcon(deleteBtn, SVG_ICONS.trash);
     deleteBtn.title = t("delete");
     deleteBtn.setAttribute("aria-label", `${t("delete")} ${link.name}`);
     deleteBtn.addEventListener("click", () => openDeleteLinkModal(link));
