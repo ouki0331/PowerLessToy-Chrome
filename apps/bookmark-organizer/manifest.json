@@ -25,6 +25,10 @@
   "permissions": [
     "storage"
   ],
+  "host_permissions": [
+    "https://commons.wikimedia.org/*",
+    "https://upload.wikimedia.org/*"
+  ],
   "browser_specific_settings": {
     "gecko": {
       "id": "bookmark-organizer@powerless-toy.local",

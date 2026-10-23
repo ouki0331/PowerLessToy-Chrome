@@ -50,6 +50,7 @@ import { handleCategoryKeydown, handleModalKeydown } from "./keyboard.js";
 import { DEFAULT_BADGES } from "./constants.js";
 import { t, getLanguage, setLanguage } from "./i18n.js";
 import { SVG_ICONS, renderSvgIcon } from "./icons.js";
+import { initBackgroundUI, updateBackgroundUI } from "./background-ui.js";
 
 // Application State
 let state = {
@@ -101,7 +102,23 @@ const elements = {
   get undoBanner() { return el("undoBanner"); },
   get undoBannerText() { return el("undoBannerText"); },
   get undoImportBtn() { return el("undoImportBtn"); },
-  get dismissUndoBtn() { return el("dismissUndoBtn"); }
+  get dismissUndoBtn() { return el("dismissUndoBtn"); },
+
+  // Background Gallery Elements
+  get bgLayer() { return el("bgLayer"); },
+  get bgImage() { return el("bgImage"); },
+  get bgOverlay() { return el("bgOverlay"); },
+  get bgFab() { return el("bgFab"); },
+  get bgToolbar() { return el("bgToolbar"); },
+  get bgFavBtn() { return el("bgFavBtn"); },
+  get bgNextBtn() { return el("bgNextBtn"); },
+  get bgLockBtn() { return el("bgLockBtn"); },
+  get bgCategoryBtn() { return el("bgCategoryBtn"); },
+  get bgFreqBtn() { return el("bgFreqBtn"); },
+  get bgInfoBtn() { return el("bgInfoBtn"); },
+  get bgSettingsBtn() { return el("bgSettingsBtn"); },
+  get bgToggleTrigger() { return el("bgToggleTrigger"); },
+  get bgPopoverContainer() { return el("bgPopoverContainer"); }
 };
 
 // Initialize Application
@@ -119,6 +136,7 @@ if (typeof document !== "undefined" && document.addEventListener) {
   setupEventListeners();
   setupStorageSubscription();
   await initWorkbench();
+  await initBackgroundUI(elements, openModal, closeModal);
   });
 }
 
@@ -142,6 +160,7 @@ function updateI18nLabels() {
   if (elements.exportBtnText) elements.exportBtnText.textContent = t("exportBtn");
   if (elements.undoImportBtn) elements.undoImportBtn.textContent = t("undoImportBtn");
   updateThemeButtonUI();
+  updateBackgroundUI(elements);
 }
 
 async function initWorkbench() {

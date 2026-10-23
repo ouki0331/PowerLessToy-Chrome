@@ -55,12 +55,29 @@ Visual Enhancements & Firefox Specification: [`docs/product/bookmark-organizer-e
   - Manifest V3 compliant with Gecko extension ID and `data_collection_permissions: { required: ["none"] }` (0 errors in `web-ext lint`).
   - CSP-compliant external `theme-init.js` and cross-browser `runtime.getURL` newtab launcher in toolbar popup.
   - Real browser execution verified on both Google Chrome and Mozilla Firefox desktop.
-- **Bilingual Support**: Pure English and Japanese UI strings (no Chinese in production extension).
+- **macOS-Inspired Visual Refinement**:
+  - Calm, focused digital workbench aesthetic adhering to Apple Human Interface Guidelines and `-apple-system` font hierarchy.
+  - Soft light (`#f5f5f7`) and layered dark (`#1c1c1e` / `#2c2c2e`) backgrounds with 1px hairline borders and subtle depth.
+  - macOS segmented control category track with high contrast active tab pill and smooth focus rings.
+  - Unified local SVG icon library (SF Symbols 1.8px stroke geometry) replacing emojis with zero external CDN dependencies.
+- **Keyless Background Gallery (`VIEW-BG-001`)**:
+  - **Completely Keyless**: Powered by Wikimedia Commons MediaWiki Action API (`https://commons.wikimedia.org/w/api.php`) with anonymous CORS (`origin=*`) and zero API keys or user accounts.
+  - **Default OFF**: Strictly zero network requests until explicitly enabled by the user in settings.
+  - **10 Curated Categories**: Nature, Architecture, Space, Animals, Travel / Places, Art, Minimal / Texture, Anime & Illustration, My Favorites, and Local Images.
+  - **Independent Category & Image Locking**: "Lock Category" restricts image pool to selected category; "Lock Image" pauses automatic rotation.
+  - **Switching Frequencies**: Manual only, Every new tab, Daily (default, reuses cached choice across new tabs within the same calendar day), and Weekly.
+  - **Readability & Contrast**: Background layer with adjustable opacity slider (0–100%) and adaptive light/dark overlay scrim preserving 100% WCAG AA text and focus contrast.
+  - **Bottom-Right Floating Action Bar (FAB)**: Compact translucent macOS pill toolbar featuring Favorite, Next Image, Lock/Unlock, Category Selector, Frequency Selector, Info/Attribution, and Settings.
+  - **Full Attribution Card**: Info popover displaying Image Title, Artist/Author, License (with link to Creative Commons / Public Domain license), and Wikimedia Commons source link.
+  - **Segregated Local Image Storage**: User upload support for PNG, JPG, and WebP stored as Blobs in isolated IndexedDB database (`PowerLessToy_Background_DB`, store `local_images`). Enforces 10MB per file and 50MB total quota with image deletion controls and zero external network traffic.
+  - **Offline & Failure Resilience**: Embedded curated offline seed pool; API timeouts, offline state, or broken images safely preserve current image or fallback to clean theme solid background without modal interruptions.
+  - **Strict Bookmark Data Isolation**: Background configuration, favorites, and local image blobs are completely isolated in separate stores and NEVER touch bookmark IndexedDB stores, JSON backup exports, pre-import snapshots, or undo routines.
+- **Bilingual Support**: Pure English and Japanese UI strings (zero Chinese in production code).
 
 ## Storage Architecture
 
 ```
-IndexedDB: powerless_toy_bookmarks_db
+IndexedDB: powerless_toy_bookmarks_db (BOOKMARK CORE DATA)
  ├── categories  [id, name, description, revision, createdAt, updatedAt]
  ├── groups      [id, categoryId, name, revision, createdAt, updatedAt]
  ├── links       [id, groupId, name, url, badge, revision, createdAt, updatedAt]
@@ -68,21 +85,27 @@ IndexedDB: powerless_toy_bookmarks_db
  ├── snapshots   [id, createdAt, reason, data: {categories, groups, links}]
  └── metadata    [key, value]
 
-chrome.storage.local / localStorage (Lightweight preferences)
+IndexedDB: PowerLessToy_Background_DB (ISOLATED LOCAL IMAGES)
+ └── local_images [id, name, size, type, blob, createdAt]
+
+chrome.storage.local / localStorage (LIGHTWEIGHT PREFERENCES)
  ├── powerless_toy_active_category_v1 (Active category ID)
- ├── powerless_toy_ui_lang (User language preference: "en" | "ja")
+ ├── powerless_toy_lang (User language preference: "en" | "ja")
  ├── powerless_toy_theme_mode (Theme mode: "system" | "light" | "dark" | "auto")
  ├── powerless_toy_cached_geo (Cached lat/lon for solar calculations, local only)
- └── powerless_toy_migration_completed_v1 (Migration status flag)
+ ├── powerless_toy_migration_completed_v1 (Migration status flag)
+ ├── powerless_toy_bg_config (Background config: enabled, opacity, frequency, categories, locks)
+ ├── powerless_toy_bg_current (Current background record with attribution metadata)
+ ├── powerless_toy_bg_favorites (Array of favorited images with attribution)
+ └── powerless_toy_bg_cache (Cached Wikimedia Commons category search responses)
 ```
 
-## Excluded from Scope
+## Excluded from Scope & Future TODOs
 
-- Account authentication, cloud databases, and cross-device syncing
-- Reading, importing, or mutating Chrome's native bookmark library
-- Automatic scraping of site favicons, page titles, or meta tags
-- Third-party favicon aggregation services or external location APIs
-- Link health monitoring or visit telemetry
+- **API-Key Photo Providers (TODO)**: Pixabay, Unsplash, Pexels, and other commercial photo APIs require user registration, API keys, or central proxy servers; strictly excluded from this keyless version and recorded as future enhancement candidates.
+- **Favicon Aggregators**: Third-party favicon services (Google Favicon, Icon Horse) are excluded for user privacy.
+- Account authentication, cloud databases, and cross-device syncing.
+- Reading, importing, or mutating Chrome's native bookmark library.
 
 ## Architecture & Code Layers
 
@@ -92,11 +115,14 @@ chrome.storage.local / localStorage (Lightweight preferences)
 - `src/newtab/solar.js`: Purely local NOAA solar equation for sunrise/sunset calculations
 - `src/newtab/theme.js`: Complete theme state machine, storage persistence, and dynamic OS listeners
 - `src/newtab/theme-init.js`: Synchronous CSP-compliant theme initializer in document head preventing FOUC
+- `src/newtab/background-service.js`: Keyless Wikimedia Commons client, frequency scheduler, favorites, and local image IndexedDB manager
+- `src/newtab/background-ui.js`: Floating action bar controller, category/frequency/attribution popovers, and settings modal
+- `src/newtab/icons.js`: Unified SF Symbols-inspired local SVG icon repository (zero innerHTML warnings)
 - `src/newtab/storage.js`: Workbench data access adapter with optimistic concurrency locking and cascade deletions
 - `src/newtab/app.js`: Reactive UI controller, event listeners, modal sanitization, link expand logic, and keyboard handling
 - `src/newtab/i18n.js`: English and Japanese translations
 - `src/background/`: Service Worker / background script lifecycle management
 - `src/popup/`: Toolbar quick launcher and link counter
 - `src/options/`: Extension information and quick entry
-- `tests/`: Automated unit and integration test suite (`node --test`) verified with 100% pass rate (93 tests)
+- `tests/`: Automated unit and integration test suite (`node --test`) verified with 100% pass rate (127 tests)
 

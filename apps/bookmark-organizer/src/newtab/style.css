@@ -1337,6 +1337,408 @@ body {
 }
 
 /* ==========================================================================
+   Background Gallery & Floating Action Bar (Commit 2)
+   ========================================================================== */
+
+.bg-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  overflow: hidden;
+}
+
+.bg-image {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: var(--bg-image-opacity, 0.35);
+  transition: opacity 0.3s ease, background-image 0.4s ease;
+}
+
+.bg-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(245, 245, 247, 0.55);
+  transition: background 0.3s ease;
+}
+
+[data-resolved-theme="dark"] .bg-overlay {
+  background: rgba(20, 20, 22, 0.65);
+}
+
+body.has-custom-bg {
+  background: transparent;
+}
+
+body.has-custom-bg .workbench-header {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+body.has-custom-bg .group-card {
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+/* Floating Action Bar */
+.bg-fab {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 850;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bg-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+[data-resolved-theme="dark"] .bg-toolbar {
+  background: rgba(44, 44, 46, 0.85);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+.bg-fab-btn,
+.bg-toggle-trigger {
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.bg-toggle-trigger {
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+[data-resolved-theme="dark"] .bg-toggle-trigger {
+  background: rgba(44, 44, 46, 0.85);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.bg-fab-btn:hover,
+.bg-toggle-trigger:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+  transform: translateY(-1px);
+}
+
+.bg-fab-btn:focus-visible,
+.bg-toggle-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.bg-fab-btn:active,
+.bg-toggle-trigger:active {
+  transform: translateY(0);
+}
+
+.bg-fab-btn.is-favorited {
+  color: #ff2d55;
+}
+
+.bg-fab-btn.is-locked {
+  color: var(--primary);
+  background: var(--primary-subtle);
+}
+
+.text-favorited {
+  color: #ff2d55;
+}
+
+/* Background Popovers */
+.bg-popover-container {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  pointer-events: none;
+}
+
+.bg-popover {
+  position: fixed;
+  bottom: 64px;
+  right: 20px;
+  min-width: 230px;
+  max-width: 340px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.16);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: auto;
+  animation: popoverFadeIn 0.15s ease-out;
+}
+
+@keyframes popoverFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.bg-popover-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  padding: 6px 8px 4px;
+}
+
+.bg-popover-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-xs);
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 12.5px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: background 0.12s ease;
+}
+
+.bg-popover-item:hover {
+  background: var(--bg-hover);
+}
+
+.bg-popover-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+}
+
+.bg-popover-item.selected {
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.bg-popover-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 0;
+}
+
+.bg-popover-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.bg-popover-label-row input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--primary);
+}
+
+/* Info Card */
+.bg-info-card {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.bg-info-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-main);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.bg-info-meta {
+  color: var(--text-secondary);
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bg-info-meta strong {
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.bg-info-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.bg-info-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-size: 11.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 500;
+}
+
+.bg-info-link:hover {
+  text-decoration: underline;
+}
+
+/* Background Settings Form */
+.bg-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 6px;
+}
+
+.bg-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.bg-setting-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.bg-setting-desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.bg-range-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bg-range-wrap input[type="range"] {
+  accent-color: var(--primary);
+  cursor: pointer;
+  width: 130px;
+}
+
+.bg-range-val {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  min-width: 34px;
+  text-align: right;
+}
+
+.bg-dropzone {
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  text-align: center;
+  background: var(--bg-subtle);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.bg-dropzone:hover {
+  border-color: var(--primary);
+  background: var(--primary-subtle);
+}
+
+.bg-dropzone-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.bg-local-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-surface);
+}
+
+.bg-local-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-subtle);
+  font-size: 12px;
+}
+
+.bg-local-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.bg-local-item-name {
+  font-weight: 500;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bg-local-item-size {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
    Responsive Breakpoints
    ========================================================================== */
 @media (max-width: 768px) {
@@ -1351,5 +1753,17 @@ body {
   }
   .group-grid {
     grid-template-columns: 1fr;
+  }
+  .bg-fab {
+    bottom: 14px;
+    right: 14px;
+  }
+  .bg-toolbar {
+    padding: 3px;
+    gap: 2px;
+  }
+  .bg-fab-btn {
+    width: 28px;
+    height: 28px;
   }
 }

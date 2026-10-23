@@ -8,6 +8,13 @@ export const THEME_MODE_KEY = "powerless_toy_theme_mode";
 export const CACHED_GEO_KEY = "powerless_toy_cached_geo";
 export const DEFAULT_THEME_MODE = "system";
 
+export const BG_CONFIG_KEY = "powerless_toy_bg_config";
+export const BG_CURRENT_KEY = "powerless_toy_bg_current";
+export const BG_FAVORITES_KEY = "powerless_toy_bg_favorites";
+export const BG_CACHE_KEY = "powerless_toy_bg_cache";
+export const BG_DB_NAME = "PowerLessToy_Background_DB";
+export const BG_LOCAL_STORE = "local_images";
+
 export const DEFAULT_BADGES = [
   { id: "local", label: "Local", colorClass: "badge-local" },
   { id: "dev", label: "Dev", colorClass: "badge-dev" },
