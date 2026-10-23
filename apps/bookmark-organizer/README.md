@@ -10,6 +10,8 @@ Product Specification: [`docs/product/bookmark-organizer.md`](../../docs/product
 
 UI/UX Design Guidelines: [`docs/product/bookmark-organizer-ui.md`](../../docs/product/bookmark-organizer-ui.md)
 
+Visual Enhancements & Firefox Specification: [`docs/product/bookmark-organizer-enhancements.md`](../../docs/product/bookmark-organizer-enhancements.md)
+
 ## Implemented Scope
 
 - **New Tab Workbench**: Overrides Chrome's New Tab with a quiet, responsive workbench panel.

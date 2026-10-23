@@ -1,8 +1,8 @@
 # Bookmark Organizer 产品定义
 
 文档状态：产品定义来源（Source of Truth）  
-产品状态：MVP `Ready for Delivery`；文件导入 `Defining`<br>
-当前可用性：`Not built`  
+产品状态：核心工作台与文件导入 `Ready for Delivery`；视觉增强与 Firefox 支持见扩展规格<br>
+当前可用性：核心工作台与文件导入 `Built and Verified`；新增增强功能 `Not built`
 适用版本：MVP 1.0  
 最后更新：2026-10-18
 
@@ -68,6 +68,15 @@ L0 Bookmark Organizer 新标签页书签工作台
 ├── L1 链接访问（OPEN）
 │   └── L2 打开行为（LINK）
 │       └── OPEN-LINK-001 当前页与新标签页打开
+├── L1 信息呈现（VIEW）
+│   ├── L2 链接详情（LINK）
+│   │   └── VIEW-LINK-001 可展开链接详情
+│   └── L2 主题（THEME）
+│       ├── VIEW-THEME-001 手动与系统主题
+│       └── VIEW-THEME-002 日出日落自动主题
+├── L1 平台兼容（PLAT）
+│   └── L2 Firefox 桌面版（FIREFOX）
+│       └── PLAT-FIREFOX-001 Firefox 桌面支持
 └── L1 数据可移植性（DATA）
     └── L2 文件导入（IMPORT）
         └── DATA-IMPORT-001 结构化文件导入（后续）
@@ -77,13 +86,17 @@ L0 Bookmark Organizer 新标签页书签工作台
 
 | 功能 ID | 功能 | 产品状态 | 当前可用性 | 详细来源 |
 | --- | --- | --- | --- | --- |
-| `NAV-HOME-001` | 新标签页工作台 | Ready for Delivery | Not built | 本文 7.1 |
-| `NAV-CAT-001` | 分类切换 | Ready for Delivery | Not built | 本文 7.2 |
-| `NAV-CAT-002` | 分类管理 | Ready for Delivery | Not built | 本文 7.3 |
-| `ORG-GROUP-001` | 分组管理 | Ready for Delivery | Not built | 本文 7.4 |
-| `ORG-LINK-001` | 链接管理与环境标识 | Ready for Delivery | Not built | 本文 7.5 |
-| `OPEN-LINK-001` | 当前页与新标签页打开 | Ready for Delivery | Not built | 本文 7.6 |
-| `DATA-IMPORT-001` | 结构化文件导入 | Defining | Not built | 本文 7.7 |
+| `NAV-HOME-001` | 新标签页工作台 | Ready for Delivery | Built and Verified | 本文 7.1 |
+| `NAV-CAT-001` | 分类切换 | Ready for Delivery | Built and Verified | 本文 7.2 |
+| `NAV-CAT-002` | 分类管理 | Ready for Delivery | Built and Verified | 本文 7.3 |
+| `ORG-GROUP-001` | 分组管理 | Ready for Delivery | Built and Verified | 本文 7.4 |
+| `ORG-LINK-001` | 链接管理与环境标识 | Ready for Delivery | Built and Verified | 本文 7.5 |
+| `OPEN-LINK-001` | 当前页与新标签页打开 | Ready for Delivery | Built and Verified | 本文 7.6 |
+| `DATA-IMPORT-001` | 结构化文件导入 | Ready for Delivery | Built and Verified | 本文 7.7 |
+| `VIEW-LINK-001` | 可展开链接详情 | Ready for Delivery | Not built | [`bookmark-organizer-enhancements.md`](bookmark-organizer-enhancements.md) |
+| `VIEW-THEME-001` | 手动与系统主题 | Ready for Delivery | Partial | [`bookmark-organizer-enhancements.md`](bookmark-organizer-enhancements.md) |
+| `VIEW-THEME-002` | 日出日落自动主题 | Ready for Delivery | Not built | [`bookmark-organizer-enhancements.md`](bookmark-organizer-enhancements.md) |
+| `PLAT-FIREFOX-001` | Firefox 桌面支持 | Ready for Delivery | Partial / Unverified | [`bookmark-organizer-enhancements.md`](bookmark-organizer-enhancements.md) |
 
 ## 5. 页面与信息结构
 
@@ -157,7 +170,7 @@ L0 Bookmark Organizer 新标签页书签工作台
 ### 7.1 `NAV-HOME-001` 新标签页工作台
 
 产品状态：`Ready for Delivery`  
-当前可用性：`Not built`
+当前可用性：`Built and Verified`
 
 #### 用户问题与价值
 
@@ -239,7 +252,7 @@ L0 Bookmark Organizer 新标签页书签工作台
 ### 7.2 `NAV-CAT-001` 分类切换
 
 产品状态：`Ready for Delivery`  
-当前可用性：`Not built`
+当前可用性：`Built and Verified`
 
 #### 用户问题与价值
 
@@ -321,7 +334,7 @@ L0 Bookmark Organizer 新标签页书签工作台
 ### 7.3 `NAV-CAT-002` 分类管理
 
 产品状态：`Ready for Delivery`  
-当前可用性：`Not built`
+当前可用性：`Built and Verified`
 
 #### 用户问题与价值
 
@@ -405,7 +418,7 @@ L0 Bookmark Organizer 新标签页书签工作台
 ### 7.4 `ORG-GROUP-001` 分组管理
 
 产品状态：`Ready for Delivery`  
-当前可用性：`Not built`
+当前可用性：`Built and Verified`
 
 #### 用户问题与价值
 
@@ -489,7 +502,7 @@ L0 Bookmark Organizer 新标签页书签工作台
 ### 7.5 `ORG-LINK-001` 链接管理与环境标识
 
 产品状态：`Ready for Delivery`  
-当前可用性：`Not built`
+当前可用性：`Built and Verified`
 
 #### 用户问题与价值
 
@@ -578,7 +591,7 @@ L0 Bookmark Organizer 新标签页书签工作台
 ### 7.6 `OPEN-LINK-001` 当前页与新标签页打开
 
 产品状态：`Ready for Delivery`  
-当前可用性：`Not built`
+当前可用性：`Built and Verified`
 
 #### 用户问题与价值
 
