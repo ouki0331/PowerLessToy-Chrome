@@ -1,11 +1,10 @@
 /**
  * Theme Management for Bookmark Organizer (VIEW-THEME-001 & VIEW-THEME-002)
- * Manages 4 modes: system, light, dark, auto (sunrise/sunset).
- * Zero FOUC, instant reactive updates, strictly local geolocation calculations.
+ * Manages 4 modes: system, light, dark, auto (local time 07:00-18:00 light, dark otherwise).
+ * Zero FOUC, instant reactive updates, strictly local time calculations without Geolocation.
  */
 
-import { THEME_MODE_KEY, CACHED_GEO_KEY, DEFAULT_THEME_MODE } from "./constants.js";
-import { getAutoThemeStatus } from "./solar.js";
+import { THEME_MODE_KEY, DEFAULT_THEME_MODE } from "./constants.js";
 import { t } from "./i18n.js";
 
 let currentMode = DEFAULT_THEME_MODE;
@@ -39,62 +38,6 @@ export async function getStoredThemeMode() {
   }
 
   return DEFAULT_THEME_MODE;
-}
-
-/**
- * Reads cached geolocation coordinates.
- * @returns {Promise<{ lat: number, lon: number } | null>}
- */
-export async function getCachedGeo() {
-  try {
-    if (typeof chrome !== "undefined" && chrome.storage?.local) {
-      const res = await chrome.storage.local.get([CACHED_GEO_KEY]);
-      if (res && res[CACHED_GEO_KEY]) {
-        let val = res[CACHED_GEO_KEY];
-        if (typeof val === "string") {
-          try {
-            val = JSON.parse(val);
-          } catch {
-            // Ignore parse error
-          }
-        }
-        return val;
-      }
-    }
-  } catch (err) {
-    console.warn("Could not read cached geo from chrome.storage.local:", err);
-  }
-
-  try {
-    const raw = localStorage.getItem(CACHED_GEO_KEY);
-    if (raw) {
-      return typeof raw === "string" ? JSON.parse(raw) : raw;
-    }
-  } catch {
-    // Ignore
-  }
-
-  return null;
-}
-
-/**
- * Saves geolocation coordinates purely locally.
- * Never exported into bookmark backups or transmitted externally.
- */
-export async function saveCachedGeo(lat, lon) {
-  const geoObj = { lat, lon, timestamp: Date.now() };
-  try {
-    if (typeof chrome !== "undefined" && chrome.storage?.local) {
-      await chrome.storage.local.set({ [CACHED_GEO_KEY]: geoObj });
-    }
-  } catch {
-    // Ignore
-  }
-  try {
-    localStorage.setItem(CACHED_GEO_KEY, JSON.stringify(geoObj));
-  } catch {
-    // Ignore
-  }
 }
 
 /**

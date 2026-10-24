@@ -289,6 +289,12 @@ export async function updateBackgroundUI(elements) {
   if (elements.bgSourceBtn) {
     elements.bgSourceBtn.setAttribute("aria-label", `${t("bgSourceToggle")}: ${sourceLabel}`);
     elements.bgSourceBtn.setAttribute("title", `${t("bgSourceToggle")}: ${sourceLabel}`);
+    elements.bgSourceBtn.setAttribute("aria-pressed", isMyImages ? "true" : "false");
+    if (isMyImages) {
+      elements.bgSourceBtn.classList.add("is-active");
+    } else {
+      elements.bgSourceBtn.classList.remove("is-active");
+    }
     renderSvgIcon(elements.bgSourceBtn.querySelector(".icon-slot"), sourceIcon);
   }
 
@@ -358,11 +364,13 @@ function updateFavButtonUI(btn, favorited) {
   const slot = btn.querySelector(".icon-slot");
   if (favorited) {
     btn.classList.add("is-favorited");
+    btn.setAttribute("aria-pressed", "true");
     btn.setAttribute("aria-label", t("bgFavRemove"));
     btn.setAttribute("title", t("bgFavRemove"));
     renderSvgIcon(slot, SVG_ICONS.heartFilled);
   } else {
     btn.classList.remove("is-favorited");
+    btn.setAttribute("aria-pressed", "false");
     btn.setAttribute("aria-label", t("bgFavAdd"));
     btn.setAttribute("title", t("bgFavAdd"));
     renderSvgIcon(slot, SVG_ICONS.heart);
@@ -377,11 +385,13 @@ function updateLockButtonUI(btn, isLocked) {
   const slot = btn.querySelector(".icon-slot");
   if (isLocked) {
     btn.classList.add("is-locked");
+    btn.setAttribute("aria-pressed", "true");
     btn.setAttribute("aria-label", t("bgUnlockImage"));
     btn.setAttribute("title", t("bgUnlockImage"));
     renderSvgIcon(slot, SVG_ICONS.lock);
   } else {
     btn.classList.remove("is-locked");
+    btn.setAttribute("aria-pressed", "false");
     btn.setAttribute("aria-label", t("bgLockImage"));
     btn.setAttribute("title", t("bgLockImage"));
     renderSvgIcon(slot, SVG_ICONS.unlock);

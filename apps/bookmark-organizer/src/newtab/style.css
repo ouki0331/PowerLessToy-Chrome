@@ -44,6 +44,17 @@
   --primary-subtle: rgba(0, 113, 227, 0.09);
   --primary-border: rgba(0, 113, 227, 0.28);
 
+  /* Background Control Dock (Light Theme - High Contrast) */
+  --bg-dock-surface: rgba(255, 255, 255, 0.97);
+  --bg-dock-border: rgba(163, 58, 0, 0.30);
+  --bg-dock-icon: #A33A00;
+  --bg-dock-icon-hover: #7C2D00;
+  --bg-dock-btn-hover-bg: rgba(163, 58, 0, 0.12);
+  --bg-dock-btn-active-bg: #C2410C;
+  --bg-dock-btn-active-icon: #FFFFFF;
+  --bg-dock-focus-ring: #C2410C;
+  --bg-dock-shadow: 0 8px 30px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(163, 58, 0, 0.12);
+
   /* Destructive / Danger */
   --danger: #df382b;
   --danger-hover: #c92f23;
@@ -129,6 +140,17 @@
   --primary-active: #006fe6;
   --primary-subtle: rgba(10, 132, 255, 0.16);
   --primary-border: rgba(10, 132, 255, 0.35);
+
+  /* Background Control Dock (Dark Theme - High Contrast) */
+  --bg-dock-surface: rgba(23, 25, 29, 0.96);
+  --bg-dock-border: rgba(100, 210, 255, 0.36);
+  --bg-dock-icon: #64D2FF;
+  --bg-dock-icon-hover: #A8EAFF;
+  --bg-dock-btn-hover-bg: rgba(100, 210, 255, 0.16);
+  --bg-dock-btn-active-bg: #0A84FF;
+  --bg-dock-btn-active-icon: #FFFFFF;
+  --bg-dock-focus-ring: #64D2FF;
+  --bg-dock-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), 0 2px 10px rgba(0, 0, 0, 0.35);
 
   /* Destructive / Danger */
   --danger: #ff453a;
@@ -1530,7 +1552,7 @@ body.has-custom-bg .group-card-header {
   background: transparent;
 }
 
-/* Floating Action Dock (High-contrast Dark Frosted Glass) */
+/* Floating Action Dock (High-contrast Themed Frosted Glass) */
 .bg-fab {
   position: fixed;
   bottom: 20px;
@@ -1543,13 +1565,13 @@ body.has-custom-bg .group-card-header {
 .bg-dock {
   display: flex;
   align-items: center;
-  background: rgba(23, 25, 29, 0.94);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--bg-dock-surface);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1.5px solid var(--bg-dock-border);
   border-radius: 9999px;
-  padding: 4px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
+  padding: 3px;
+  box-shadow: var(--bg-dock-shadow);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
 }
@@ -1558,66 +1580,95 @@ body.has-custom-bg .group-card-header {
   display: flex;
   align-items: center;
   gap: 4px;
+  width: 0;
+  min-width: 0;
   max-width: 0;
   opacity: 0;
-  transform: translateX(8px);
+  visibility: hidden;
+  transform: translateX(10px);
   overflow: hidden;
   pointer-events: none;
-  transition: max-width 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+  margin: 0;
+  padding: 0;
+  transition: max-width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
               opacity 0.18s ease,
+              visibility 0.18s ease,
               transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .bg-dock.is-expanded .bg-dock-actions {
+  width: auto;
   max-width: 320px;
   opacity: 1;
+  visibility: visible;
   transform: translateX(0);
   pointer-events: auto;
+  margin-right: 4px;
 }
 
 .bg-dock-btn,
 .bg-dock-trigger,
 .bg-fab-btn,
 .bg-toggle-trigger {
-  min-width: 36px;
-  min-height: 36px;
-  width: 36px;
-  height: 36px;
+  min-width: 40px;
+  min-height: 40px;
+  width: 40px;
+  height: 40px;
   border-radius: 9999px;
   border: none;
   background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #FFB547;
+  color: var(--bg-dock-icon);
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
+  opacity: 1;
   transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
 .bg-dock-trigger,
 .bg-toggle-trigger {
-  min-width: 40px;
-  min-height: 40px;
-  width: 40px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.08);
+  min-width: 42px;
+  min-height: 42px;
+  width: 42px;
+  height: 42px;
+  background: transparent;
+}
+
+/* Icon size and stroke width specifically in Dock (18x18px, 2.2px stroke) */
+.bg-dock .ui-icon,
+.bg-dock-btn .ui-icon,
+.bg-dock-trigger .ui-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.2px;
+}
+
+.bg-dock .ui-icon path,
+.bg-dock .ui-icon line,
+.bg-dock .ui-icon polyline,
+.bg-dock .ui-icon polygon,
+.bg-dock .ui-icon circle,
+.bg-dock .ui-icon rect {
+  stroke-width: 2.2px;
 }
 
 .bg-dock-btn:hover,
 .bg-dock-trigger:hover,
 .bg-fab-btn:hover,
 .bg-toggle-trigger:hover {
-  color: #FFD28A;
-  background-color: rgba(255, 255, 255, 0.14);
+  color: var(--bg-dock-icon-hover);
+  background-color: var(--bg-dock-btn-hover-bg);
 }
 
 .bg-dock-btn:focus-visible,
 .bg-dock-trigger:focus-visible,
 .bg-fab-btn:focus-visible,
 .bg-toggle-trigger:focus-visible {
-  outline: 2px solid #FF9F0A;
+  outline: 2px solid var(--bg-dock-focus-ring);
   outline-offset: 2px;
 }
 
@@ -1625,42 +1676,47 @@ body.has-custom-bg .group-card-header {
 .bg-dock-trigger:active,
 .bg-fab-btn:active,
 .bg-toggle-trigger:active {
-  transform: scale(0.95);
+  transform: scale(0.94);
 }
 
-/* Active Source or State */
+.bg-dock-btn:disabled,
+.bg-dock-trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Active / Selected / Locked state: Solid accent background with white icon */
 .bg-dock-btn.is-active,
-.bg-dock-trigger.is-active {
-  background-color: #FF9F0A;
-  color: #17191D;
+.bg-dock-trigger.is-active,
+.bg-dock-btn.is-locked,
+.bg-fab-btn.is-locked {
+  background-color: var(--bg-dock-btn-active-bg);
+  color: var(--bg-dock-btn-active-icon);
 }
 
 .bg-dock-btn.is-active:hover,
-.bg-dock-trigger.is-active:hover {
-  background-color: #FFB547;
-  color: #17191D;
+.bg-dock-trigger.is-active:hover,
+.bg-dock-btn.is-locked:hover,
+.bg-fab-btn.is-locked:hover {
+  background-color: var(--bg-dock-btn-active-bg);
+  color: var(--bg-dock-btn-active-icon);
+  filter: brightness(1.08);
 }
 
-/* Favorited state (heart) */
+/* Favorited state (heart): filled heart with #FF375F */
 .bg-dock-btn.is-favorited,
 .bg-fab-btn.is-favorited {
-  color: #FF5C7A;
+  color: #FF375F;
 }
 
 .bg-dock-btn.is-favorited:hover,
 .bg-fab-btn.is-favorited:hover {
-  color: #FF7B94;
-}
-
-/* Locked state */
-.bg-dock-btn.is-locked,
-.bg-fab-btn.is-locked {
-  background-color: rgba(255, 159, 10, 0.22);
-  color: #FF9F0A;
+  color: #FF375F;
+  background-color: rgba(255, 55, 95, 0.14);
 }
 
 .text-favorited {
-  color: #FF5C7A;
+  color: #FF375F;
 }
 
 .bg-badge-current {
