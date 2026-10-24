@@ -94,20 +94,23 @@ const translations = {
     themeSystem: "System",
     themeLight: "Light",
     themeDark: "Dark",
-    themeAuto: "Sunrise / Sunset",
+    themeAuto: "Automatic by local time",
     nextTransitionLabel: (type, time) => `${type} at ${time}`,
-    sunriseText: "Sunrise",
-    sunsetText: "Sunset",
-    geoDeniedNotice: "Location permission was denied. Switched to System theme.",
-    geoFailedNotice: "Could not access location. Switched to System theme.",
+    sunriseText: "Daytime",
+    sunsetText: "Nighttime",
 
-    // Background Gallery (Keyless Wikimedia Commons & Controls)
+    // Background Header Action & Controls
+    bgButton: "Background",
     bgEnabledLabel: "Background Image",
     bgOpacityLabel: "Opacity",
+    bgEnableDesc: "Toggle keyless background image gallery",
+    bgOpacityDesc: "Adjust visibility for comfortable reading",
+    bgSourceLabel: "Source",
     bgLockImage: "Lock Current Image",
     bgUnlockImage: "Unlock Image",
     bgCategoryLabel: "Category",
     bgLockCategory: "Lock to Selected Category",
+    bgCategoryMinRequired: "At least one category must be selected.",
     bgFrequencyLabel: "Frequency",
     bgFreqManual: "Manual only",
     bgFreqTab: "Every new tab",
@@ -146,7 +149,15 @@ const translations = {
     bgLocalLimitExceeded: "File exceeds 10MB limit.",
     bgLocalQuotaExceeded: "Total images exceed 50MB quota.",
     bgDeleteImage: "Delete",
-    bgClose: "Close"
+    bgClose: "Close",
+
+    // Group Sorting & Manual Drag Reordering
+    sortMostUsed: "Sort by Most Used",
+    sortRecentlyUsed: "Sort by Recently Used",
+    sortCreatedAt: "Sort by Created Date",
+    sortManual: "Manual (Drag & Drop)",
+    dragHandleAria: (name) => `Drag to reorder group "${name}". Press Alt+Up or Alt+Down to move.`,
+    groupMoved: (name, from, to) => `Moved group "${name}" from position ${from} to ${to}.`
   },
   ja: {
     appTitle: "Bookmark Organizer",
@@ -238,20 +249,23 @@ const translations = {
     themeSystem: "システム設定",
     themeLight: "ライト",
     themeDark: "ダーク",
-    themeAuto: "日出・日没に合わせる",
+    themeAuto: "現地時刻で自動",
     nextTransitionLabel: (type, time) => `${time} に${type}`,
-    sunriseText: "日の出",
-    sunsetText: "日没",
-    geoDeniedNotice: "位置情報へのアクセスが拒否されたため、システム設定モードに戻しました。",
-    geoFailedNotice: "位置情報を取得できなかったため、システム設定モードに戻しました。",
+    sunriseText: "昼間",
+    sunsetText: "夜間",
 
-    // Background Gallery (Keyless Wikimedia Commons & Controls)
+    // Background Header Action & Controls
+    bgButton: "背景",
     bgEnabledLabel: "背景画像",
     bgOpacityLabel: "不透明度",
+    bgEnableDesc: "背景画像ギャラリーを切り替えます",
+    bgOpacityDesc: "文字の読みやすさに合わせて透明度を調整します",
+    bgSourceLabel: "出典",
     bgLockImage: "現在の画像を固定",
     bgUnlockImage: "画像の固定を解除",
     bgCategoryLabel: "カテゴリ",
     bgLockCategory: "選択カテゴリに固定",
+    bgCategoryMinRequired: "少なくとも1つのカテゴリを選択する必要があります。",
     bgFrequencyLabel: "切り替え頻度",
     bgFreqManual: "手動のみ",
     bgFreqTab: "新規タブを開くたび",
@@ -290,7 +304,15 @@ const translations = {
     bgLocalLimitExceeded: "ファイルサイズが10MBの上限を超えています。",
     bgLocalQuotaExceeded: "ローカル画像の合計容量が50MBの上限を超えています。",
     bgDeleteImage: "削除",
-    bgClose: "閉じる"
+    bgClose: "閉じる",
+
+    // Group Sorting & Manual Drag Reordering
+    sortMostUsed: "よく使う順",
+    sortRecentlyUsed: "最近使用した順",
+    sortCreatedAt: "作成日時順",
+    sortManual: "手動（ドラッグ＆ドロップ）",
+    dragHandleAria: (name) => `「${name}」の順序を変更。Alt+上下矢印キーで移動。`,
+    groupMoved: (name, from, to) => `グループ「${name}」を ${from} 番目から ${to} 番目に移動しました。`
   }
 };
 

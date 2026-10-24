@@ -476,6 +476,8 @@ body {
    Main Content Area
    ========================================================================== */
 .workbench-main {
+  position: relative;
+  z-index: 10;
   max-width: 1440px;
   margin: 0 auto;
   padding: 24px;
@@ -515,6 +517,42 @@ body {
   gap: 8px;
 }
 
+.cat-sort-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background-color: var(--bg-segmented);
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.cat-sort-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xs);
+  color: var(--text-muted);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cat-sort-btn:hover {
+  color: var(--text-main);
+  background-color: var(--bg-hover);
+}
+
+.cat-sort-btn[aria-pressed="true"] {
+  color: var(--primary);
+  background-color: var(--bg-segmented-active);
+  box-shadow: var(--shadow-segmented);
+}
+
 /* ==========================================================================
    Group Grid & Cards
    ========================================================================== */
@@ -532,12 +570,26 @@ body {
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
   overflow: hidden;
+  position: relative;
 }
 
 .group-card:hover {
   border-color: var(--border-strong);
+}
+
+.group-card.is-dragging {
+  opacity: 0.45;
+  border: 1px dashed var(--primary);
+}
+
+.group-card.drop-target-before {
+  border-top: 2px solid var(--primary);
+}
+
+.group-card.drop-target-after {
+  border-bottom: 2px solid var(--primary);
 }
 
 .group-card-header {
@@ -548,6 +600,44 @@ body {
   justify-content: space-between;
   gap: 8px;
   background: var(--bg-surface);
+}
+
+.group-header-lead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.drag-handle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: grab;
+  border-radius: var(--radius-xs);
+  transition: color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.drag-handle-btn:active {
+  cursor: grabbing;
+}
+
+.drag-handle-btn:hover {
+  color: var(--text-main);
+  background-color: var(--bg-hover);
+}
+
+.drag-handle-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
 }
 
 .group-title {
@@ -1344,7 +1434,7 @@ body {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: -1;
+  z-index: 0;
   overflow: hidden;
 }
 
@@ -1375,12 +1465,38 @@ body.has-custom-bg {
 }
 
 body.has-custom-bg .workbench-header {
+  background: rgba(245, 245, 247, 0.88);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 }
 
+[data-resolved-theme="dark"] body.has-custom-bg .workbench-header {
+  background: rgba(28, 28, 30, 0.88);
+}
+
+body.has-custom-bg .category-nav-wrapper {
+  background: rgba(245, 245, 247, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+[data-resolved-theme="dark"] body.has-custom-bg .category-nav-wrapper {
+  background: rgba(28, 28, 30, 0.88);
+}
+
 body.has-custom-bg .group-card {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+[data-resolved-theme="dark"] body.has-custom-bg .group-card {
+  background: rgba(36, 36, 38, 0.92);
+}
+
+body.has-custom-bg .group-card-header {
+  background: transparent;
 }
 
 /* Floating Action Bar */
@@ -1767,3 +1883,17 @@ body.has-custom-bg .group-card {
     height: 28px;
   }
 }
+
+/* Accessibility: Screen Reader Only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+

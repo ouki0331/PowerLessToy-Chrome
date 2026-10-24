@@ -7,6 +7,9 @@ try {
     resolved = "dark";
   } else if (mode === "light") {
     resolved = "light";
+  } else if (mode === "auto") {
+    const hour = new Date().getHours();
+    resolved = (hour >= 7 && hour < 18) ? "light" : "dark";
   } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
     resolved = "dark";
   }

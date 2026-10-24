@@ -22,6 +22,8 @@ import {
   getLocalImagesList,
   deleteLocalImage,
   getLocalImagesTotalSize,
+  resolveImageDisplayUrl,
+  revokeActiveBlobUrl,
   COMMONS_CATEGORIES,
   DEFAULT_BG_CONFIG
 } from "./background-service.js";
@@ -52,12 +54,31 @@ const FREQUENCY_KEYS = [
 ];
 
 /**
+ * Helper to keep aria-expanded attributes in sync on trigger buttons
+ */
+export function setPopoverAriaState(elements, activeBtn = null) {
+  const buttons = [
+    elements?.bgCategoryBtn,
+    elements?.bgFreqBtn,
+    elements?.bgInfoBtn,
+    elements?.bgSettingsBtn,
+    elements?.bgToggleTrigger,
+    elements?.bgHeaderBtn
+  ];
+  buttons.forEach((btn) => {
+    if (btn) {
+      btn.setAttribute("aria-expanded", btn === activeBtn ? "true" : "false");
+    }
+  });
+}
+
+/**
  * Initializes Background UI, attaches event listeners, and applies initial state
  */
 export async function initBackgroundUI(elements, openModalFn, closeModalFn) {
   if (!elements || !elements.bgFab) return;
 
-  // Render icons on toolbar buttons
+  // Render icons on toolbar buttons and header button
   renderSvgIcon(elements.bgFavBtn?.querySelector(".icon-slot"), SVG_ICONS.heart);
   renderSvgIcon(elements.bgNextBtn?.querySelector(".icon-slot"), SVG_ICONS.next);
   renderSvgIcon(elements.bgLockBtn?.querySelector(".icon-slot"), SVG_ICONS.unlock);
@@ -66,6 +87,13 @@ export async function initBackgroundUI(elements, openModalFn, closeModalFn) {
   renderSvgIcon(elements.bgInfoBtn?.querySelector(".icon-slot"), SVG_ICONS.infoCircle);
   renderSvgIcon(elements.bgSettingsBtn?.querySelector(".icon-slot"), SVG_ICONS.manage);
   renderSvgIcon(elements.bgToggleTrigger?.querySelector(".icon-slot"), SVG_ICONS.wallpaper);
+  renderSvgIcon(elements.bgHeaderBtn?.querySelector("#bgHeaderBtnIcon"), SVG_ICONS.wallpaper);
+
+  // Bind Header Background button
+  elements.bgHeaderBtn?.addEventListener("click", () => {
+    closeBgPopover(elements);
+    openBgSettingsModal(elements, openModalFn, closeModalFn);
+  });
 
   // Bind FAB events
   elements.bgFavBtn?.addEventListener("click", async () => {
@@ -123,10 +151,17 @@ export async function initBackgroundUI(elements, openModalFn, closeModalFn) {
     openBgSettingsModal(elements, openModalFn, closeModalFn);
   });
 
+  // Clean up object URLs on unload
+  if (typeof window !== "undefined") {
+    window.addEventListener("beforeunload", () => {
+      revokeActiveBlobUrl();
+    });
+  }
+
   // Global listeners to close popovers on outside click or Escape
   if (typeof document !== "undefined") {
     document.addEventListener("click", (e) => {
-      if (activePopoverType && !e.target.closest("#bgFab") && !e.target.closest("#bgPopoverContainer")) {
+      if (activePopoverType && !e.target.closest("#bgFab") && !e.target.closest("#bgPopoverContainer") && !e.target.closest("#bgHeaderBtn")) {
         closeBgPopover(elements);
       }
     });
@@ -187,15 +222,18 @@ export async function updateBackgroundUI(elements) {
 async function applyBackgroundImage(elements, image) {
   if (!elements || !elements.bgImage) return;
 
-  if (image && (image.thumbUrl || image.originalUrl)) {
-    const url = image.thumbUrl || image.originalUrl;
-    elements.bgImage.style.backgroundImage = `url("${url}")`;
-    const favorited = await isFavorite(image.id || image.originalUrl);
-    updateFavButtonUI(elements.bgFavBtn, favorited);
-  } else {
-    elements.bgImage.style.backgroundImage = "none";
-    updateFavButtonUI(elements.bgFavBtn, false);
+  if (image) {
+    const url = await resolveImageDisplayUrl(image);
+    if (url) {
+      elements.bgImage.style.backgroundImage = `url("${url}")`;
+      const favorited = await isFavorite(image.id || image.originalUrl);
+      updateFavButtonUI(elements.bgFavBtn, favorited);
+      return;
+    }
   }
+
+  elements.bgImage.style.backgroundImage = "none";
+  updateFavButtonUI(elements.bgFavBtn, false);
 }
 
 /**
@@ -244,19 +282,21 @@ export function closeBgPopover(elements) {
     elements.bgPopoverContainer.replaceChildren();
     elements.bgPopoverContainer.style.display = "none";
   }
+  setPopoverAriaState(elements, null);
   activePopoverType = null;
 }
 
 /**
- * Opens Category Selection Popover
+ * Opens Category Selection Popover with multi-select support
  */
 export async function openCategoryPopover(elements) {
   if (!elements?.bgPopoverContainer) return;
   closeBgPopover(elements);
   activePopoverType = "category";
+  setPopoverAriaState(elements, elements?.bgCategoryBtn);
 
   const config = await getBgConfig();
-  const currentCat = (config.categories && config.categories[0]) || "nature";
+  let selectedCats = Array.isArray(config.categories) && config.categories.length > 0 ? [...config.categories] : ["nature"];
 
   const popover = document.createElement("div");
   popover.className = "bg-popover";
@@ -268,28 +308,65 @@ export async function openCategoryPopover(elements) {
   header.textContent = t("bgCategoryLabel");
   popover.appendChild(header);
 
-  // List of categories
-  for (const cat of CATEGORY_KEYS) {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = `bg-popover-item ${cat.id === currentCat ? "selected" : ""}`;
-    item.textContent = t(cat.i18nKey);
+  const notice = document.createElement("div");
+  notice.className = "bg-popover-notice";
+  notice.style.display = "none";
+  notice.style.fontSize = "11px";
+  notice.style.color = "var(--danger)";
+  notice.style.padding = "4px 8px";
+  notice.textContent = t("bgCategoryMinRequired");
+  popover.appendChild(notice);
 
-    if (cat.id === currentCat) {
-      const check = document.createElement("span");
-      renderSvgIcon(check, SVG_ICONS.checkCircle);
-      item.appendChild(check);
+  const listContainer = document.createElement("div");
+  listContainer.className = "bg-popover-list";
+
+  const renderList = () => {
+    listContainer.replaceChildren();
+    for (const cat of CATEGORY_KEYS) {
+      const isSelected = selectedCats.includes(cat.id);
+      const row = document.createElement("label");
+      row.className = `bg-popover-item bg-popover-checkbox-row ${isSelected ? "selected" : ""}`;
+      row.style.cursor = "pointer";
+      row.style.display = "flex";
+      row.style.alignItems = "center";
+      row.style.gap = "8px";
+
+      const chk = document.createElement("input");
+      chk.type = "checkbox";
+      chk.checked = isSelected;
+      chk.style.accentColor = "var(--primary)";
+
+      chk.addEventListener("change", async () => {
+        if (!chk.checked) {
+          if (selectedCats.length <= 1) {
+            chk.checked = true;
+            notice.style.display = "block";
+            return;
+          }
+          selectedCats = selectedCats.filter((id) => id !== cat.id);
+          notice.style.display = "none";
+        } else {
+          if (!selectedCats.includes(cat.id)) {
+            selectedCats.push(cat.id);
+          }
+          notice.style.display = "none";
+        }
+        await saveBgConfig({ categories: selectedCats });
+        renderList();
+      });
+
+      const labelSpan = document.createElement("span");
+      labelSpan.style.flex = "1";
+      labelSpan.textContent = t(cat.i18nKey);
+
+      row.appendChild(chk);
+      row.appendChild(labelSpan);
+      listContainer.appendChild(row);
     }
+  };
 
-    item.addEventListener("click", async () => {
-      await saveBgConfig({ categories: [cat.id] });
-      closeBgPopover(elements);
-      const next = await getNextImage({ force: true });
-      await applyBackgroundImage(elements, next);
-    });
-
-    popover.appendChild(item);
-  }
+  renderList();
+  popover.appendChild(listContainer);
 
   // Divider & Category Lock checkbox
   const divider = document.createElement("div");
@@ -321,6 +398,7 @@ export async function openFrequencyPopover(elements) {
   if (!elements?.bgPopoverContainer) return;
   closeBgPopover(elements);
   activePopoverType = "frequency";
+  setPopoverAriaState(elements, elements?.bgFreqBtn);
 
   const config = await getBgConfig();
   const currentFreq = config.frequency || "daily";
@@ -366,6 +444,7 @@ export async function openInfoPopover(elements) {
   if (!elements?.bgPopoverContainer) return;
   closeBgPopover(elements);
   activePopoverType = "info";
+  setPopoverAriaState(elements, elements?.bgInfoBtn);
 
   const current = await getBgCurrent();
 
@@ -423,7 +502,7 @@ export async function openInfoPopover(elements) {
 
     const sourceRow = document.createElement("div");
     const sourceLabel = document.createElement("strong");
-    sourceLabel.textContent = "Source: ";
+    sourceLabel.textContent = `${t("bgSourceLabel")}: `;
     sourceRow.appendChild(sourceLabel);
     sourceRow.appendChild(document.createTextNode(current.isLocal ? t("bgCatLocal") : t("bgSourceCommons")));
     meta.appendChild(sourceRow);
@@ -488,7 +567,7 @@ export async function openBgSettingsModal(elements, openModalFn, closeModalFn) {
   enableLabel.textContent = t("bgEnabledLabel");
   const enableDesc = document.createElement("div");
   enableDesc.className = "bg-setting-desc";
-  enableDesc.textContent = "Toggle keyless Wikimedia Commons background gallery";
+  enableDesc.textContent = t("bgEnableDesc");
   enableLabelWrap.appendChild(enableLabel);
   enableLabelWrap.appendChild(enableDesc);
 
@@ -511,7 +590,7 @@ export async function openBgSettingsModal(elements, openModalFn, closeModalFn) {
   opacityLabel.textContent = t("bgOpacityLabel");
   const opacityDesc = document.createElement("div");
   opacityDesc.className = "bg-setting-desc";
-  opacityDesc.textContent = "Adjust visibility for comfortable reading";
+  opacityDesc.textContent = t("bgOpacityDesc");
   opacityLabelWrap.appendChild(opacityLabel);
   opacityLabelWrap.appendChild(opacityDesc);
 
@@ -639,26 +718,42 @@ export async function openBgSettingsModal(elements, openModalFn, closeModalFn) {
     }
   };
 
+  const uploadError = document.createElement("div");
+  uploadError.className = "bg-upload-error";
+  uploadError.style.display = "none";
+  uploadError.style.color = "var(--danger)";
+  uploadError.style.fontSize = "12px";
+  uploadError.style.padding = "6px 10px";
+  uploadError.style.borderRadius = "var(--radius-sm, 6px)";
+  uploadError.style.background = "var(--danger-subtle, rgba(223, 56, 43, 0.08))";
+  uploadError.style.border = "1px solid var(--danger-border, rgba(223, 56, 43, 0.25))";
+  localSection.insertBefore(uploadError, dropzone);
+
   fileInput.addEventListener("change", async () => {
     const file = fileInput.files?.[0];
     if (!file) return;
+    uploadError.style.display = "none";
     try {
       await saveLocalImage(file);
       fileInput.value = "";
       await refreshLocalList();
     } catch (err) {
-      alert(err.message || t("bgLocalLimitExceeded"));
+      uploadError.textContent = err.message || t("bgLocalLimitExceeded");
+      uploadError.style.display = "block";
     }
   });
 
   await refreshLocalList();
   container.appendChild(localSection);
 
+  setPopoverAriaState(elements, elements?.bgHeaderBtn || elements?.bgSettingsBtn);
+
   // Open modal
   openModalFn(
     t("bgSettingsTitle"),
     container,
     async () => {
+      setPopoverAriaState(elements, null);
       const newEnabled = enableCheckbox.checked;
       const newOpacity = Number(opacityInput.value);
       await saveBgConfig({
@@ -668,7 +763,10 @@ export async function openBgSettingsModal(elements, openModalFn, closeModalFn) {
       await updateBackgroundUI(elements);
       return true;
     },
-    t("save")
+    t("save"),
+    () => {
+      setPopoverAriaState(elements, null);
+    }
   );
 }
 

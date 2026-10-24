@@ -5,7 +5,7 @@
  */
 
 export const DB_NAME = "PowerLessToy_BookmarkOrganizer_DB";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export const STORES = {
   CATEGORIES: "categories",
@@ -13,7 +13,8 @@ export const STORES = {
   LINKS: "links",
   IMPORT_JOBS: "importJobs",
   SNAPSHOTS: "snapshots",
-  METADATA: "metadata"
+  METADATA: "metadata",
+  GROUP_METRICS: "groupMetrics"
 };
 
 // In-memory simulation of IndexedDB for Node.js test runner when globalThis.indexedDB is absent
@@ -98,7 +99,8 @@ class MemoryDatabase {
       [STORES.LINKS, new MemoryObjectStore(STORES.LINKS, "id", { groupId: "groupId" })],
       [STORES.IMPORT_JOBS, new MemoryObjectStore(STORES.IMPORT_JOBS, "id", { importedAt: "importedAt" })],
       [STORES.SNAPSHOTS, new MemoryObjectStore(STORES.SNAPSHOTS, "id", { createdAt: "createdAt" })],
-      [STORES.METADATA, new MemoryObjectStore(STORES.METADATA, "key")]
+      [STORES.METADATA, new MemoryObjectStore(STORES.METADATA, "key")],
+      [STORES.GROUP_METRICS, new MemoryObjectStore(STORES.GROUP_METRICS, "groupId")]
     ]);
     this.transactionQueue = Promise.resolve();
   }
@@ -188,6 +190,10 @@ function openBrowserDatabase() {
 
       if (!db.objectStoreNames.contains(STORES.METADATA)) {
         db.createObjectStore(STORES.METADATA, { keyPath: "key" });
+      }
+
+      if (!db.objectStoreNames.contains(STORES.GROUP_METRICS)) {
+        db.createObjectStore(STORES.GROUP_METRICS, { keyPath: "groupId" });
       }
     };
 

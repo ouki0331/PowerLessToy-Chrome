@@ -154,7 +154,7 @@ export async function loadWorkbenchData() {
       const lnks = await stores[STORES.LINKS].getAll();
       return {
         categories: cats.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)),
-        groups: grps.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)),
+        groups: grps.sort((a, b) => (a.sortOrder ?? a.createdAt ?? 0) - (b.sortOrder ?? b.createdAt ?? 0)),
         links: lnks.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
       };
     }
@@ -281,7 +281,7 @@ export async function renameCategory(data, categoryId, newName, expectedRevision
  */
 export async function deleteCategory(data, categoryId) {
   return withTransaction(
-    [STORES.CATEGORIES, STORES.GROUPS, STORES.LINKS],
+    [STORES.CATEGORIES, STORES.GROUPS, STORES.LINKS, STORES.GROUP_METRICS],
     "readwrite",
     async (stores) => {
       const allCats = await stores[STORES.CATEGORIES].getAll();
@@ -308,6 +308,7 @@ export async function deleteCategory(data, categoryId) {
       }
       for (const group of groupsToDelete) {
         await stores[STORES.GROUPS].delete(group.id);
+        await stores[STORES.GROUP_METRICS].delete(group.id);
       }
       await stores[STORES.CATEGORIES].delete(categoryId);
 
@@ -358,12 +359,17 @@ export async function addGroup(data, categoryId, name) {
       throw new Error(`Category ${categoryId} not found`);
     }
     const all = await stores[STORES.GROUPS].getAll();
+    const catGroups = all.filter((g) => g.categoryId === categoryId);
+    const maxSortOrder = catGroups.reduce((max, g) => Math.max(max, g.sortOrder || 0), 0);
+    const sortOrder = maxSortOrder + 1;
+
     const maxCreatedAt = all.reduce((max, g) => Math.max(max, g.createdAt || 0), 0);
     const now = Math.max(Date.now(), maxCreatedAt + 1);
     const grp = {
       id: `grp_${now}_${Math.random().toString(36).substring(2, 7)}`,
       categoryId,
       name: trimmedName,
+      sortOrder,
       revision: 1,
       createdAt: now,
       updatedAt: now
@@ -413,10 +419,10 @@ export async function renameGroup(data, groupId, newName, expectedRevision) {
 }
 
 /**
- * Delete a group in a single transaction with cascade deletion of its links
+ * Delete a group in a single transaction with cascade deletion of its links and usage metrics
  */
 export async function deleteGroup(data, groupId) {
-  return withTransaction([STORES.GROUPS, STORES.LINKS], "readwrite", async (stores) => {
+  return withTransaction([STORES.GROUPS, STORES.LINKS, STORES.GROUP_METRICS], "readwrite", async (stores) => {
     const group = await stores[STORES.GROUPS].get(groupId);
     if (!group) {
       throw new Error(`Group ${groupId} not found`);
@@ -429,6 +435,7 @@ export async function deleteGroup(data, groupId) {
       await stores[STORES.LINKS].delete(link.id);
     }
     await stores[STORES.GROUPS].delete(groupId);
+    await stores[STORES.GROUP_METRICS].delete(groupId);
 
     if (data && typeof data === "object") {
       if (Array.isArray(data.groups)) {
@@ -442,6 +449,93 @@ export async function deleteGroup(data, groupId) {
     return {
       deletedLinksCount: linksToDelete.length
     };
+  });
+}
+
+/**
+ * Batch update sortOrder for groups within a category
+ * Runs in a single readwrite transaction with optimistic locking on each group.
+ */
+export async function reorderGroups(data, categoryId, orderedGroupIds) {
+  if (!Array.isArray(orderedGroupIds) || orderedGroupIds.length === 0) {
+    return [];
+  }
+
+  const updatedGroups = await withTransaction([STORES.GROUPS], "readwrite", async (stores) => {
+    const allGroups = await stores[STORES.GROUPS].getAll();
+    const catGroups = allGroups.filter((g) => g.categoryId === categoryId);
+    const groupMap = new Map(catGroups.map((g) => [g.id, g]));
+
+    const now = Date.now();
+    const updated = [];
+
+    for (let i = 0; i < orderedGroupIds.length; i++) {
+      const gId = orderedGroupIds[i];
+      const grp = groupMap.get(gId);
+      if (!grp) continue;
+
+      const newSortOrder = i + 1;
+      if (grp.sortOrder !== newSortOrder) {
+        const nextRev = (grp.revision || 1) + 1;
+        const mutated = {
+          ...grp,
+          sortOrder: newSortOrder,
+          revision: nextRev,
+          updatedAt: now
+        };
+        await stores[STORES.GROUPS].put(mutated);
+        updated.push(mutated);
+      }
+    }
+
+    return updated;
+  });
+
+  if (data && typeof data === "object" && Array.isArray(data.groups)) {
+    for (const updated of updatedGroups) {
+      const item = data.groups.find((g) => g.id === updated.id);
+      if (item) Object.assign(item, updated);
+    }
+  }
+
+  return updatedGroups;
+}
+
+/**
+ * Atomically record click usage for a group (usageCount and lastUsedAt)
+ * Uses separate store STORES.GROUP_METRICS so group entity revision is untouched.
+ */
+export async function recordGroupClick(groupId) {
+  if (!groupId) return null;
+  return withTransaction([STORES.GROUP_METRICS], "readwrite", async (stores) => {
+    const existing = (await stores[STORES.GROUP_METRICS].get(groupId)) || {
+      groupId,
+      usageCount: 0,
+      lastUsedAt: 0
+    };
+    const updated = {
+      groupId,
+      usageCount: (existing.usageCount || 0) + 1,
+      lastUsedAt: Date.now()
+    };
+    await stores[STORES.GROUP_METRICS].put(updated);
+    return updated;
+  });
+}
+
+/**
+ * Reads all group metrics as a Map of groupId -> metric
+ */
+export async function getGroupMetricsMap() {
+  return withTransaction([STORES.GROUP_METRICS], "readonly", async (stores) => {
+    const list = await stores[STORES.GROUP_METRICS].getAll();
+    const map = new Map();
+    for (const item of list) {
+      if (item && item.groupId) {
+        map.set(item.groupId, item);
+      }
+    }
+    return map;
   });
 }
 

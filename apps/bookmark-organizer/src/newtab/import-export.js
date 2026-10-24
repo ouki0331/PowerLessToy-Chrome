@@ -180,6 +180,9 @@ export function validateImportJson(rawJson) {
     else if (groupIds.has(grp.id)) errors.push(`${path}.id: duplicate id '${grp.id}'`);
     else groupIds.add(grp.id);
     if (!isNonEmptyString(grp.name)) errors.push(`${path}.name: required non-empty string`);
+    if (grp.sortOrder !== undefined && typeof grp.sortOrder !== "number") {
+      errors.push(`${path}.sortOrder: must be a number when present`);
+    }
     if (!isNonEmptyString(grp.categoryId)) {
       errors.push(`${path}.categoryId: required non-empty string`);
     } else if (!categoryIds.has(grp.categoryId)) {
@@ -286,7 +289,19 @@ export function planImport(parsed, current, conflictResolutions = {}) {
         warnings.push(`groups[${index}] '${inGrp.name}' has the same name as an earlier group in the same category; they will be merged.`);
       }
     } else {
-      const record = { id: generateId("grp"), categoryId: targetCatId, name: inGrp.name.trim() };
+      const catGroups = existingGroups.filter((g) => g.categoryId === targetCatId);
+      const plannedCatGroups = newGroups.filter((g) => g.record.categoryId === targetCatId);
+      const maxSortOrder = [...catGroups, ...plannedCatGroups.map((g) => g.record)].reduce(
+        (max, g) => Math.max(max, g.sortOrder || 0),
+        0
+      );
+      const assignedSortOrder = typeof inGrp.sortOrder === "number" ? inGrp.sortOrder : maxSortOrder + 1;
+      const record = {
+        id: generateId("grp"),
+        categoryId: targetCatId,
+        name: inGrp.name.trim(),
+        sortOrder: assignedSortOrder
+      };
       newGroups.push({ index, record });
       groupTarget.set(inGrp.id, record.id);
       grpByKey.set(key, { id: record.id, source: "file", record });
@@ -883,7 +898,8 @@ export function generateBackupJson({ categories, groups, links }) {
     groups: [...groups].sort(byCreated).map((g) => ({
       id: g.id,
       categoryId: g.categoryId,
-      name: g.name
+      name: g.name,
+      ...(typeof g.sortOrder === "number" ? { sortOrder: g.sortOrder } : {})
     })),
     links: [...links].sort(byCreated).map((l) => ({
       id: l.id,

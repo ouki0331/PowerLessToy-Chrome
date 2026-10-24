@@ -109,7 +109,7 @@ describe("Bookmark Organizer - Import data-safety regressions", () => {
 
       const backup = await exportBackup();
       assert.equal(validateImportJson(backup).valid, true);
-      assert.deepEqual(Object.keys(backup.groups[0]).sort(), ["categoryId", "id", "name"]);
+      assert.deepEqual(Object.keys(backup.groups[0]).sort(), ["categoryId", "id", "name", "sortOrder"]);
 
       _resetMemoryStore();
       // Fresh DB: seed then import backup -> categories merge by name, group + link added

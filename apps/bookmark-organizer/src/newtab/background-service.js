@@ -84,10 +84,12 @@ export const COMMONS_CATEGORIES = {
 };
 
 /**
- * Curated offline / fallback seeds with complete Creative Commons / Public Domain credits.
- * Used when the user enables background but is offline or API is unreachable.
+ * Curated built-in fallback images from Wikimedia Commons with complete
+ * Creative Commons and Public Domain credits.
+ * These remote Wikimedia URLs serve as reliable built-in fallback seeds when
+ * the user enables background but is offline or the Commons MediaWiki API is unreachable.
  */
-export const OFFLINE_SEED_IMAGES = [
+export const BUILTIN_FALLBACK_IMAGES = [
   {
     id: "File:Moraine_Lake_17092005.jpg",
     title: "Moraine Lake, Banff National Park",
@@ -133,6 +135,9 @@ export const OFFLINE_SEED_IMAGES = [
     category: "space"
   }
 ];
+
+// Backward-compatible alias for existing tests
+export const OFFLINE_SEED_IMAGES = BUILTIN_FALLBACK_IMAGES;
 
 // In-memory cache for test/active tab speed
 let memoryStorage = {};
@@ -212,17 +217,85 @@ export async function saveBgConfig(updates) {
 
 /**
  * Reads current active background record
+/**
+ * Generates local date key formatted as YYYY-MM-DD using user's system clock.
+ * Avoids UTC date mismatch bugs caused by toISOString().
+ */
+export function getLocalDateKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+let activeBlobUrl = null;
+
+export function getActiveBlobUrl() {
+  return activeBlobUrl;
+}
+
+export function revokeActiveBlobUrl() {
+  if (activeBlobUrl && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+    URL.revokeObjectURL(activeBlobUrl);
+    activeBlobUrl = null;
+  }
+}
+
+/**
+ * Resolves the actual image URL to display.
+ * For local images, loads Blob from IndexedDB and creates a document-scoped Object URL.
+ * Automatically revokes previously created Object URL to prevent memory leaks.
+ */
+export async function resolveImageDisplayUrl(imageRecord) {
+  if (!imageRecord) return "";
+
+  if (imageRecord.isLocal) {
+    const blob = await getLocalImageBlob(imageRecord.id);
+    if (!blob) return "";
+    revokeActiveBlobUrl();
+    if (typeof URL !== "undefined" && typeof URL.createObjectURL === "function") {
+      activeBlobUrl = URL.createObjectURL(blob);
+      return activeBlobUrl;
+    }
+    return "";
+  }
+
+  return imageRecord.thumbUrl || imageRecord.originalUrl || "";
+}
+
+/**
+ * Reads current active background record
  */
 export async function getBgCurrent() {
   return await storageGet(BG_CURRENT_KEY, null);
 }
 
 /**
- * Saves current active background record
+ * Saves current active background record.
+ * Never persists blob: URLs to storage.
  */
 export async function saveBgCurrent(imageRecord) {
-  await storageSet(BG_CURRENT_KEY, imageRecord);
-  return imageRecord;
+  if (!imageRecord) {
+    await storageSet(BG_CURRENT_KEY, null);
+    return null;
+  }
+  const toSave = { ...imageRecord };
+  if (toSave.isLocal || toSave.category === "local" || (typeof toSave.url === "string" && toSave.url.startsWith("blob:"))) {
+    delete toSave.url;
+    delete toSave.thumbUrl;
+    delete toSave.originalUrl;
+    if (toSave.category === "local" || toSave.isLocal) {
+      toSave.isLocal = true;
+    }
+  }
+  if (typeof toSave.thumbUrl === "string" && toSave.thumbUrl.startsWith("blob:")) {
+    delete toSave.thumbUrl;
+  }
+  if (typeof toSave.originalUrl === "string" && toSave.originalUrl.startsWith("blob:")) {
+    delete toSave.originalUrl;
+  }
+  await storageSet(BG_CURRENT_KEY, toSave);
+  return toSave;
 }
 
 /**
@@ -248,11 +321,12 @@ export async function saveBgFavorites(favs) {
 export async function isFavorite(idOrUrl) {
   if (!idOrUrl) return false;
   const favs = await getBgFavorites();
-  return favs.some((f) => f.id === idOrUrl || f.originalUrl === idOrUrl || f.thumbUrl === idOrUrl);
+  return favs.some((f) => f.id === idOrUrl || (f.originalUrl && f.originalUrl === idOrUrl) || (f.thumbUrl && f.thumbUrl === idOrUrl));
 }
 
 /**
  * Adds an image to favorites (deduplicating by ID or URL)
+ * Never persists blob: URLs for local images.
  */
 export async function addFavorite(image) {
   if (!image || (!image.id && !image.originalUrl)) return false;
@@ -260,16 +334,18 @@ export async function addFavorite(image) {
   const exists = favs.some((f) => f.id === image.id || (f.originalUrl && f.originalUrl === image.originalUrl));
   if (exists) return true;
 
+  const isLocal = Boolean(image.isLocal || image.category === "local");
   const entry = {
     id: image.id || `fav_${Date.now()}`,
-    title: image.title || "Untitled",
-    artist: image.artist || "Unknown",
-    thumbUrl: image.thumbUrl || image.originalUrl,
-    originalUrl: image.originalUrl || image.thumbUrl,
+    title: image.title || image.name || "Untitled",
+    artist: isLocal ? "Local User Upload" : (image.artist || "Unknown"),
+    thumbUrl: isLocal ? "" : (image.thumbUrl || image.originalUrl || ""),
+    originalUrl: isLocal ? "" : (image.originalUrl || image.thumbUrl || ""),
     commonsUrl: image.commonsUrl || "",
-    license: image.license || "Attribution / License",
+    license: isLocal ? "Local Private Image" : (image.license || "Attribution / License"),
     licenseUrl: image.licenseUrl || "",
-    category: image.category || "nature",
+    category: isLocal ? "local" : (image.category || "nature"),
+    isLocal,
     addedAt: Date.now()
   };
 
@@ -398,6 +474,9 @@ export async function saveLocalImage(file) {
       });
     };
     req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => db.close();
+    tx.onabort = () => db.close();
   });
 }
 
@@ -423,6 +502,9 @@ export async function getLocalImagesList() {
       resolve(list);
     };
     req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => db.close();
+    tx.onabort = () => db.close();
   });
 }
 
@@ -439,6 +521,9 @@ export async function getLocalImageBlob(id) {
     const req = store.get(id);
     req.onsuccess = () => resolve(req.result ? req.result.blob : null);
     req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => db.close();
+    tx.onabort = () => db.close();
   });
 }
 
@@ -455,6 +540,9 @@ export async function deleteLocalImage(id) {
     const req = store.delete(id);
     req.onsuccess = () => resolve(true);
     req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+    tx.onerror = () => db.close();
+    tx.onabort = () => db.close();
   });
 }
 
@@ -620,7 +708,7 @@ export function shouldSwitchImage(config, currentImage) {
   }
 
   const now = Date.now();
-  const todayStr = new Date(now).toISOString().slice(0, 10);
+  const todayStr = getLocalDateKey(new Date(now));
 
   if (config.frequency === "daily") {
     return currentImage.dateKey !== todayStr;
@@ -648,9 +736,15 @@ export async function getNextImage({ force = false, fetchFn = fetch } = {}) {
     return current;
   }
 
+  const orderMode = config.order || "featured";
+
   // Determine active category pool
   let targetCategory = "nature";
-  if (Array.isArray(config.categories) && config.categories.length > 0) {
+  const favsList = await getBgFavorites();
+
+  if (orderMode === "favorites_first" && favsList.length > 0) {
+    targetCategory = "favorites";
+  } else if (Array.isArray(config.categories) && config.categories.length > 0) {
     if (config.isCategoryLocked) {
       targetCategory = config.categories[0];
     } else {
@@ -663,67 +757,66 @@ export async function getNextImage({ force = false, fetchFn = fetch } = {}) {
 
   // Special Category: Favorites
   if (targetCategory === "favorites") {
-    const favs = await getBgFavorites();
+    const favs = favsList;
     if (favs.length === 0) {
       return { isEmptyFavorites: true, category: "favorites" };
     }
-    candidates = favs;
+    candidates = [...favs];
   } else if (targetCategory === "local") {
     // Special Category: Local Images
     const localList = await getLocalImagesList();
     if (localList.length === 0) {
       return { isEmptyLocal: true, category: "local" };
     }
-    // Pick one from local list
-    const pick = localList[Math.floor(Math.random() * localList.length)];
-    const blob = await getLocalImageBlob(pick.id);
-    let blobUrl = "";
-    if (blob && typeof URL !== "undefined" && URL.createObjectURL) {
-      blobUrl = URL.createObjectURL(blob);
-    }
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const newRecord = {
-      id: pick.id,
-      title: pick.name,
+    candidates = localList.map((item) => ({
+      id: item.id,
+      title: item.name || "Local Private Image",
       artist: "Local User Upload",
-      thumbUrl: blobUrl,
-      originalUrl: blobUrl,
+      thumbUrl: "",
+      originalUrl: "",
       commonsUrl: "",
       license: "Local Private Image",
       licenseUrl: "",
       category: "local",
       isLocal: true,
-      updatedAt: Date.now(),
-      dateKey: todayStr
-    };
-    await saveBgCurrent(newRecord);
-    return newRecord;
+      createdAt: item.createdAt || 0
+    }));
   } else {
     // Normal Wikimedia Commons Category
     candidates = await fetchCommonsCategoryImages(targetCategory, { fetchFn });
   }
 
   if (!candidates || candidates.length === 0) {
-    // Safe fallback: keep existing if available, or offline seed
+    // Safe fallback: keep existing if available, or built-in seed
     if (current && !current.isEmptyFavorites && !current.isEmptyLocal) {
       return current;
     }
-    candidates = OFFLINE_SEED_IMAGES;
+    candidates = [...BUILTIN_FALLBACK_IMAGES];
   }
 
-  // Pick candidate (avoiding same image if candidates > 1)
+  // Apply order sorting
+  if (orderMode === "newest") {
+    candidates.sort((a, b) => {
+      const timeA = a.createdAt || a.addedAt || 0;
+      const timeB = b.createdAt || b.addedAt || 0;
+      return timeB - timeA;
+    });
+  }
+
   let chosen = candidates[0];
-  if (candidates.length > 1 && current?.id) {
-    const others = candidates.filter((c) => c.id !== current.id);
-    if (others.length > 0) {
-      const idx = Math.floor(Math.random() * others.length);
-      chosen = others[idx];
+  if (orderMode === "random" || candidates.length > 1) {
+    if (candidates.length > 1 && current?.id) {
+      const others = candidates.filter((c) => c.id !== current.id);
+      if (others.length > 0) {
+        const idx = Math.floor(Math.random() * others.length);
+        chosen = others[idx];
+      }
+    } else if (candidates.length > 1) {
+      chosen = candidates[Math.floor(Math.random() * candidates.length)];
     }
-  } else if (candidates.length > 1) {
-    chosen = candidates[Math.floor(Math.random() * candidates.length)];
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getLocalDateKey(new Date());
   const nextRecord = {
     ...chosen,
     updatedAt: Date.now(),

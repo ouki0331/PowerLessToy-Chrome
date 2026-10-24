@@ -75,9 +75,15 @@ describe("Bookmark Organizer - Firefox Compatibility (PLAT-FIREFOX-001)", () => 
   });
 
   it("passes web-ext lint with zero errors", () => {
+    const localWebExt = path.join(appDir, "node_modules", ".bin", "web-ext");
+    const cmd = fs.existsSync(localWebExt)
+      ? `"${localWebExt}" lint --source-dir "${appDir}"`
+      : `npx --yes web-ext lint --source-dir "${appDir}"`;
+
     try {
-      const lintOutput = execSync(`npx --yes web-ext lint --source-dir "${appDir}"`, {
+      const lintOutput = execSync(cmd, {
         encoding: "utf-8",
+        timeout: 15000,
         stdio: ["ignore", "pipe", "pipe"]
       });
       assert.ok(

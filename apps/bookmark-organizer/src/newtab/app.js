@@ -23,7 +23,10 @@ import {
   editLink,
   deleteLink,
   isValidUrl,
-  subscribeStorageChanges
+  subscribeStorageChanges,
+  reorderGroups,
+  recordGroupClick,
+  getGroupMetricsMap
 } from "./storage.js";
 
 import {
@@ -118,7 +121,14 @@ const elements = {
   get bgInfoBtn() { return el("bgInfoBtn"); },
   get bgSettingsBtn() { return el("bgSettingsBtn"); },
   get bgToggleTrigger() { return el("bgToggleTrigger"); },
-  get bgPopoverContainer() { return el("bgPopoverContainer"); }
+  get bgPopoverContainer() { return el("bgPopoverContainer"); },
+  get bgHeaderBtn() { return el("bgHeaderBtn"); },
+  get bgHeaderBtnText() { return el("bgHeaderBtnText"); },
+  get catSortControls() { return el("catSortControls"); },
+  get sortMostUsedBtn() { return el("sortMostUsedBtn"); },
+  get sortRecentlyUsedBtn() { return el("sortRecentlyUsedBtn"); },
+  get sortCreatedBtn() { return el("sortCreatedBtn"); },
+  get a11yAnnouncer() { return el("a11yAnnouncer"); }
 };
 
 // Initialize Application
@@ -159,6 +169,19 @@ function updateI18nLabels() {
   if (elements.importBtnText) elements.importBtnText.textContent = t("importBtn");
   if (elements.exportBtnText) elements.exportBtnText.textContent = t("exportBtn");
   if (elements.undoImportBtn) elements.undoImportBtn.textContent = t("undoImportBtn");
+  if (elements.bgHeaderBtnText) elements.bgHeaderBtnText.textContent = t("bgButton");
+  if (elements.sortMostUsedBtn) {
+    elements.sortMostUsedBtn.title = t("sortMostUsed");
+    elements.sortMostUsedBtn.setAttribute("aria-label", t("sortMostUsed"));
+  }
+  if (elements.sortRecentlyUsedBtn) {
+    elements.sortRecentlyUsedBtn.title = t("sortRecentlyUsed");
+    elements.sortRecentlyUsedBtn.setAttribute("aria-label", t("sortRecentlyUsed"));
+  }
+  if (elements.sortCreatedBtn) {
+    elements.sortCreatedBtn.title = t("sortCreatedAt");
+    elements.sortCreatedBtn.setAttribute("aria-label", t("sortCreatedAt"));
+  }
   updateThemeButtonUI();
   updateBackgroundUI(elements);
 }
@@ -296,6 +319,54 @@ function setupEventListeners() {
       });
     }
   });
+
+  // Category Group Sort Controls
+  renderSvgIcon(elements.sortMostUsedBtn?.querySelector(".icon-slot"), SVG_ICONS.sortMostUsed);
+  renderSvgIcon(elements.sortRecentlyUsedBtn?.querySelector(".icon-slot"), SVG_ICONS.sortRecentlyUsed);
+  renderSvgIcon(elements.sortCreatedBtn?.querySelector(".icon-slot"), SVG_ICONS.sortCreatedAt);
+
+  elements.sortMostUsedBtn?.addEventListener("click", () => handleSortToggle("most_used"));
+  elements.sortRecentlyUsedBtn?.addEventListener("click", () => handleSortToggle("recently_used"));
+  elements.sortCreatedBtn?.addEventListener("click", () => handleSortToggle("created_at"));
+}
+
+let currentDraggedGroupId = null;
+
+function getCategorySortMode(categoryId) {
+  try {
+    return localStorage.getItem(`powerless_toy_cat_sort_${categoryId}`) || "manual";
+  } catch {
+    return "manual";
+  }
+}
+
+function setCategorySortMode(categoryId, mode) {
+  try {
+    localStorage.setItem(`powerless_toy_cat_sort_${categoryId}`, mode);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function announceA11y(message) {
+  if (elements.a11yAnnouncer) {
+    elements.a11yAnnouncer.textContent = "";
+    setTimeout(() => {
+      if (elements.a11yAnnouncer) {
+        elements.a11yAnnouncer.textContent = message;
+      }
+    }, 50);
+  }
+}
+
+async function handleSortToggle(mode) {
+  const activeCat = getActiveCategory();
+  if (!activeCat) return;
+
+  const currentMode = getCategorySortMode(activeCat.id);
+  const nextMode = currentMode === mode ? "manual" : mode;
+  setCategorySortMode(activeCat.id, nextMode);
+  await renderGroups();
 }
 
 // ==========================================================================
@@ -815,15 +886,15 @@ async function switchCategory(catId, preserveFocus = false) {
 // Rendering
 // ==========================================================================
 
-function renderAll(maintainActiveFocus = false) {
+async function renderAll(maintainActiveFocus = false) {
   if (!state.data) return;
   renderCategoryTabs(maintainActiveFocus);
-  renderCategoryContent();
+  await renderCategoryContent();
 }
 
-function renderCategoryContent() {
+async function renderCategoryContent() {
   renderActiveCategoryHeader();
-  renderGroups();
+  await renderGroups();
 }
 
 function renderCategoryTabs(maintainActiveFocus = false) {
@@ -864,9 +935,21 @@ function renderActiveCategoryHeader() {
   elements.deleteCatBtn.disabled = state.data.categories.length <= 1;
 }
 
-function renderGroups() {
+async function renderGroups() {
   const activeCat = getActiveCategory();
   if (!activeCat) return;
+
+  const sortMode = getCategorySortMode(activeCat.id);
+
+  if (elements.sortMostUsedBtn) {
+    elements.sortMostUsedBtn.setAttribute("aria-pressed", sortMode === "most_used" ? "true" : "false");
+  }
+  if (elements.sortRecentlyUsedBtn) {
+    elements.sortRecentlyUsedBtn.setAttribute("aria-pressed", sortMode === "recently_used" ? "true" : "false");
+  }
+  if (elements.sortCreatedBtn) {
+    elements.sortCreatedBtn.setAttribute("aria-pressed", sortMode === "created_at" ? "true" : "false");
+  }
 
   const currentGroups = state.data.groups.filter((g) => g.categoryId === activeCat.id);
 
@@ -880,9 +963,255 @@ function renderGroups() {
   elements.categoryEmptyState.style.display = "none";
   elements.groupGrid.innerHTML = "";
 
-  currentGroups.forEach((group) => {
+  let sortedGroups = [...currentGroups];
+  const metricsMap = await getGroupMetricsMap().catch(() => new Map());
+
+  if (sortMode === "most_used") {
+    sortedGroups.sort((a, b) => {
+      const aMetric = metricsMap.get(a.id) || { usageCount: 0 };
+      const bMetric = metricsMap.get(b.id) || { usageCount: 0 };
+      const diff = (bMetric.usageCount || 0) - (aMetric.usageCount || 0);
+      if (diff !== 0) return diff;
+      const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      if (orderDiff !== 0) return orderDiff;
+      const createdDiff = (b.createdAt || 0) - (a.createdAt || 0);
+      if (createdDiff !== 0) return createdDiff;
+      return a.id.localeCompare(b.id);
+    });
+  } else if (sortMode === "recently_used") {
+    sortedGroups.sort((a, b) => {
+      const aMetric = metricsMap.get(a.id) || { lastUsedAt: 0 };
+      const bMetric = metricsMap.get(b.id) || { lastUsedAt: 0 };
+      const diff = (bMetric.lastUsedAt || 0) - (aMetric.lastUsedAt || 0);
+      if (diff !== 0) return diff;
+      const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      if (orderDiff !== 0) return orderDiff;
+      const createdDiff = (b.createdAt || 0) - (a.createdAt || 0);
+      if (createdDiff !== 0) return createdDiff;
+      return a.id.localeCompare(b.id);
+    });
+  } else if (sortMode === "created_at") {
+    sortedGroups.sort((a, b) => {
+      const diff = (b.createdAt || 0) - (a.createdAt || 0);
+      if (diff !== 0) return diff;
+      const orderDiff = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      if (orderDiff !== 0) return orderDiff;
+      return a.id.localeCompare(b.id);
+    });
+  } else {
+    // manual sort
+    sortedGroups.sort((a, b) => {
+      const orderDiff = (a.sortOrder ?? a.createdAt ?? 0) - (b.sortOrder ?? b.createdAt ?? 0);
+      if (orderDiff !== 0) return orderDiff;
+      const createdDiff = (a.createdAt || 0) - (b.createdAt || 0);
+      if (createdDiff !== 0) return createdDiff;
+      return a.id.localeCompare(b.id);
+    });
+  }
+
+  sortedGroups.forEach((group) => {
     const groupCard = createGroupCard(group);
     elements.groupGrid.appendChild(groupCard);
+  });
+}
+
+function setupDragHandleEvents(dragHandle, card, group) {
+  dragHandle.addEventListener("dragstart", (e) => {
+    currentDraggedGroupId = group.id;
+    card.classList.add("is-dragging");
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", group.id);
+    }
+    const activeCat = getActiveCategory();
+    if (activeCat && getCategorySortMode(activeCat.id) !== "manual") {
+      setCategorySortMode(activeCat.id, "manual");
+      elements.sortMostUsedBtn?.setAttribute("aria-pressed", "false");
+      elements.sortRecentlyUsedBtn?.setAttribute("aria-pressed", "false");
+      elements.sortCreatedBtn?.setAttribute("aria-pressed", "false");
+    }
+  });
+
+  dragHandle.addEventListener("dragend", () => {
+    card.classList.remove("is-dragging");
+    document.querySelectorAll(".group-card").forEach((c) => {
+      c.classList.remove("is-dragging", "drop-target-before", "drop-target-after");
+    });
+    currentDraggedGroupId = null;
+  });
+
+  // Touch Support
+  dragHandle.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    currentDraggedGroupId = group.id;
+    card.classList.add("is-dragging");
+    const activeCat = getActiveCategory();
+    if (activeCat && getCategorySortMode(activeCat.id) !== "manual") {
+      setCategorySortMode(activeCat.id, "manual");
+      elements.sortMostUsedBtn?.setAttribute("aria-pressed", "false");
+      elements.sortRecentlyUsedBtn?.setAttribute("aria-pressed", "false");
+      elements.sortCreatedBtn?.setAttribute("aria-pressed", "false");
+    }
+  }, { passive: true });
+
+  dragHandle.addEventListener("touchmove", (e) => {
+    if (!currentDraggedGroupId || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const targetElem = document.elementFromPoint(touch.clientX, touch.clientY);
+    const overCard = targetElem?.closest(".group-card");
+
+    document.querySelectorAll(".group-card").forEach((c) => {
+      if (c !== overCard) c.classList.remove("drop-target-before", "drop-target-after");
+    });
+
+    if (overCard && overCard !== card) {
+      const rect = overCard.getBoundingClientRect();
+      if (touch.clientY < rect.top + rect.height / 2) {
+        overCard.classList.add("drop-target-before");
+        overCard.classList.remove("drop-target-after");
+      } else {
+        overCard.classList.add("drop-target-after");
+        overCard.classList.remove("drop-target-before");
+      }
+    }
+  }, { passive: true });
+
+  dragHandle.addEventListener("touchend", async () => {
+    if (!currentDraggedGroupId) return;
+    card.classList.remove("is-dragging");
+    const overCard = document.querySelector(".group-card.drop-target-before, .group-card.drop-target-after");
+    if (overCard && overCard !== card) {
+      const isBefore = overCard.classList.contains("drop-target-before");
+      overCard.classList.remove("drop-target-before", "drop-target-after");
+      const targetGroupId = overCard.dataset.groupId;
+      const activeCat = getActiveCategory();
+      if (activeCat && targetGroupId) {
+        setCategorySortMode(activeCat.id, "manual");
+        const catGroups = state.data.groups
+          .filter((g) => g.categoryId === activeCat.id)
+          .sort((a, b) => (a.sortOrder ?? a.createdAt ?? 0) - (b.sortOrder ?? b.createdAt ?? 0));
+        const sIdx = catGroups.findIndex((g) => g.id === group.id);
+        const tIdx = catGroups.findIndex((g) => g.id === targetGroupId);
+        if (sIdx !== -1 && tIdx !== -1) {
+          const [moved] = catGroups.splice(sIdx, 1);
+          const newTIdx = catGroups.findIndex((g) => g.id === targetGroupId);
+          const insIdx = isBefore ? newTIdx : newTIdx + 1;
+          catGroups.splice(insIdx, 0, moved);
+          const orderedIds = catGroups.map((g) => g.id);
+          await reorderGroups(state.data, activeCat.id, orderedIds);
+          announceA11y(t("groupMoved", moved.name, sIdx + 1, insIdx + 1));
+          await renderGroups();
+        }
+      }
+    }
+    document.querySelectorAll(".group-card").forEach((c) => {
+      c.classList.remove("is-dragging", "drop-target-before", "drop-target-after");
+    });
+    currentDraggedGroupId = null;
+  });
+
+  // Keyboard Support (Alt+Arrow)
+  dragHandle.addEventListener("keydown", async (e) => {
+    if (!e.altKey) return;
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown" && e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+
+    e.preventDefault();
+    const activeCat = getActiveCategory();
+    if (!activeCat) return;
+
+    // Exit auto-sort
+    setCategorySortMode(activeCat.id, "manual");
+    elements.sortMostUsedBtn?.setAttribute("aria-pressed", "false");
+    elements.sortRecentlyUsedBtn?.setAttribute("aria-pressed", "false");
+    elements.sortCreatedBtn?.setAttribute("aria-pressed", "false");
+
+    const catGroups = state.data.groups
+      .filter((g) => g.categoryId === activeCat.id)
+      .sort((a, b) => (a.sortOrder ?? a.createdAt ?? 0) - (b.sortOrder ?? b.createdAt ?? 0));
+
+    const currentIndex = catGroups.findIndex((g) => g.id === group.id);
+    if (currentIndex === -1) return;
+
+    const moveUp = e.key === "ArrowUp" || e.key === "ArrowLeft";
+    const targetIndex = moveUp ? currentIndex - 1 : currentIndex + 1;
+
+    if (targetIndex < 0 || targetIndex >= catGroups.length) {
+      return;
+    }
+
+    const [movedGroup] = catGroups.splice(currentIndex, 1);
+    catGroups.splice(targetIndex, 0, movedGroup);
+
+    const orderedIds = catGroups.map((g) => g.id);
+    try {
+      await reorderGroups(state.data, activeCat.id, orderedIds);
+      announceA11y(t("groupMoved", movedGroup.name, currentIndex + 1, targetIndex + 1));
+      await renderGroups();
+      const newHandle = document.querySelector(`.group-card[data-group-id="${group.id}"] .drag-handle-btn`);
+      newHandle?.focus();
+    } catch (err) {
+      console.error("Failed to reorder groups via keyboard:", err);
+    }
+  });
+}
+
+function setupCardDropEvents(card, group) {
+  card.addEventListener("dragover", (e) => {
+    if (!currentDraggedGroupId || currentDraggedGroupId === group.id) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+
+    const rect = card.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    if (e.clientY < midY) {
+      card.classList.add("drop-target-before");
+      card.classList.remove("drop-target-after");
+    } else {
+      card.classList.add("drop-target-after");
+      card.classList.remove("drop-target-before");
+    }
+  });
+
+  card.addEventListener("dragleave", (e) => {
+    if (!card.contains(e.relatedTarget)) {
+      card.classList.remove("drop-target-before", "drop-target-after");
+    }
+  });
+
+  card.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    const sourceId = currentDraggedGroupId || (e.dataTransfer ? e.dataTransfer.getData("text/plain") : null);
+    card.classList.remove("drop-target-before", "drop-target-after");
+    if (!sourceId || sourceId === group.id) return;
+
+    const activeCat = getActiveCategory();
+    if (!activeCat) return;
+
+    setCategorySortMode(activeCat.id, "manual");
+
+    const catGroups = state.data.groups
+      .filter((g) => g.categoryId === activeCat.id)
+      .sort((a, b) => (a.sortOrder ?? a.createdAt ?? 0) - (b.sortOrder ?? b.createdAt ?? 0));
+
+    const sourceIndex = catGroups.findIndex((g) => g.id === sourceId);
+    const targetIndex = catGroups.findIndex((g) => g.id === group.id);
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    const [movedGroup] = catGroups.splice(sourceIndex, 1);
+    const rect = card.getBoundingClientRect();
+    const insertBefore = e.clientY < rect.top + rect.height / 2;
+    const newTargetIndex = catGroups.findIndex((g) => g.id === group.id);
+    const insertIndex = insertBefore ? newTargetIndex : newTargetIndex + 1;
+    catGroups.splice(insertIndex, 0, movedGroup);
+
+    const orderedIds = catGroups.map((g) => g.id);
+    try {
+      await reorderGroups(state.data, activeCat.id, orderedIds);
+      announceA11y(t("groupMoved", movedGroup.name, sourceIndex + 1, insertIndex + 1));
+      await renderGroups();
+    } catch (err) {
+      console.error("Failed to reorder groups on drop:", err);
+    }
   });
 }
 
@@ -897,11 +1226,32 @@ function createGroupCard(group) {
   const header = document.createElement("div");
   header.className = "group-card-header";
 
+  const lead = document.createElement("div");
+  lead.className = "group-header-lead";
+
+  if (state.isManageMode) {
+    const dragHandle = document.createElement("button");
+    dragHandle.type = "button";
+    dragHandle.className = "drag-handle-btn";
+    dragHandle.setAttribute("draggable", "true");
+    dragHandle.setAttribute("aria-label", t("dragHandleAria", group.name));
+    dragHandle.title = t("dragHandleAria", group.name);
+    dragHandle.dataset.groupId = group.id;
+    renderSvgIcon(dragHandle, SVG_ICONS.dragHandle);
+
+    setupDragHandleEvents(dragHandle, card, group);
+    lead.appendChild(dragHandle);
+
+    setupCardDropEvents(card, group);
+  }
+
   const title = document.createElement("h3");
   title.id = `group-title-${group.id}`;
   title.className = "group-title";
   title.textContent = group.name;
-  header.appendChild(title);
+  lead.appendChild(title);
+
+  header.appendChild(lead);
 
   if (state.isManageMode) {
     const actions = document.createElement("div");
@@ -1114,6 +1464,9 @@ function createLinkItem(link, group) {
 
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
+      recordGroupClick(group.id).catch((err) => {
+        console.warn("Failed to record group click:", err);
+      });
       if (typeof chrome !== "undefined" && chrome.tabs?.create) {
         chrome.tabs.create({ url: link.url, active: false });
       } else {
@@ -1123,6 +1476,9 @@ function createLinkItem(link, group) {
     }
 
     e.preventDefault();
+    recordGroupClick(group.id).catch((err) => {
+      console.warn("Failed to record group click:", err);
+    });
     window.location.href = link.url;
   });
 

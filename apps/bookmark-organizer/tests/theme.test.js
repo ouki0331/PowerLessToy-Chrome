@@ -197,57 +197,38 @@ describe("Bookmark Organizer - Theme Selection and Persistence (VIEW-THEME-001 &
     assert.equal(input.value, "Unsaved draft project name", "input value must still be preserved");
   });
 
-  it("auto theme switches to dark at night and light in day based on geolocation", async () => {
-    const mockGeo = {
-      getCurrentPosition: (success) => {
-        success({
-          coords: {
-            latitude: 35.6762,
-            longitude: 139.6503
-          }
-        });
-      }
-    };
-
-    const res = await setThemeMode("auto", { geolocation: mockGeo });
+  it("auto theme switches to light in daytime (07:00-18:00) and dark at night based on local time", async () => {
+    const res = await setThemeMode("auto");
     assert.equal(getThemeMode(), "auto");
-    assert.ok(mockChromeStorage[CACHED_GEO_KEY]);
-    assert.ok(res.autoInfo !== null);
-    assert.ok(["light", "dark"].includes(res.resolved));
     assert.equal(mockAttributes["data-theme"], "auto");
-  });
-
-  it("reverts gracefully to system theme if geolocation permission is denied", async () => {
-    const mockGeo = {
-      getCurrentPosition: (_success, error) => {
-        error({
-          code: 1, // PERMISSION_DENIED
-          message: "User denied Geolocation"
-        });
-      }
-    };
-
-    const res = await setThemeMode("auto", { geolocation: mockGeo });
-    assert.equal(getThemeMode(), "system");
-    assert.ok(res.notice !== undefined && res.notice.length > 0);
-    assert.equal(mockAttributes["data-theme"], "system");
-  });
-
-  it("uses cached coordinates if location request temporarily fails", async () => {
-    await saveCachedGeo(35.6762, 139.6503);
-
-    const mockGeo = {
-      getCurrentPosition: (_success, error) => {
-        error({
-          code: 3, // TIMEOUT
-          message: "Location request timed out"
-        });
-      }
-    };
-
-    const res = await setThemeMode("auto", { geolocation: mockGeo });
-    assert.equal(getThemeMode(), "auto");
     assert.ok(res.autoInfo !== null);
+    assert.ok(res.autoInfo.timeZone);
+    assert.ok(["light", "dark"].includes(res.resolved));
+    assert.ok(res.autoInfo.nextTransitionDate instanceof Date);
+
+    // Verify day vs night rule
+    const currentHour = new Date().getHours();
+    const expectedTheme = (currentHour >= 7 && currentHour < 18) ? "light" : "dark";
+    assert.equal(res.resolved, expectedTheme);
+  });
+
+  it("auto theme never downgrades to system mode and requires zero geolocation", async () => {
+    // Calling setThemeMode("auto") without any geolocation parameter
+    const res = await setThemeMode("auto");
+    assert.equal(getThemeMode(), "auto");
+    assert.equal(res.mode, "auto");
+    assert.equal(res.notice, null);
+    assert.equal(mockAttributes["data-theme"], "auto");
+    assert.equal(mockChromeStorage[THEME_MODE_KEY], "auto");
+    assert.equal(mockLocalStorage[THEME_MODE_KEY], "auto");
+  });
+
+  it("auto theme schedules next transition at 07:00 or 18:00 local time", async () => {
+    const res = await setThemeMode("auto");
+    const nextDate = res.autoInfo.nextTransitionDate;
+    assert.ok(nextDate.getTime() > Date.now());
+    const nextHour = nextDate.getHours();
+    assert.ok(nextHour === 7 || nextHour === 18);
   });
 
   it("never includes theme preferences or location in bookmark JSON backup export", async () => {

@@ -163,19 +163,44 @@ function scheduleAutoTransition(nextDate) {
 }
 
 /**
- * Evaluates the auto theme using cached geolocation coordinates.
+ * Resolves day/night theme based on IANA timezone and local hour (07:00 - 18:00 = light, else dark).
+ * Eliminates all Geolocation API dependencies.
  */
-export async function evaluateAutoTheme() {
-  const geo = await getCachedGeo();
-  if (!geo || typeof geo.lat !== "number" || typeof geo.lon !== "number") {
-    // No coordinates available: fallback to system
-    currentAutoInfo = null;
-    const sysResolved = getSystemResolvedTheme();
-    applyTheme(sysResolved, "system");
-    return { success: false, reason: "no_geo" };
+export function getLocalTimeAutoStatus(date = new Date()) {
+  let timeZone = "UTC";
+  try {
+    timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    timeZone = "UTC";
   }
 
-  const status = getAutoThemeStatus(geo.lat, geo.lon, new Date());
+  const hour = date.getHours();
+  const isDay = hour >= 7 && hour < 18;
+  const resolvedTheme = isDay ? "light" : "dark";
+
+  let nextTransitionDate = new Date(date);
+  if (isDay) {
+    nextTransitionDate.setHours(18, 0, 0, 0);
+  } else if (hour >= 18) {
+    nextTransitionDate.setDate(nextTransitionDate.getDate() + 1);
+    nextTransitionDate.setHours(7, 0, 0, 0);
+  } else {
+    nextTransitionDate.setHours(7, 0, 0, 0);
+  }
+
+  return {
+    timeZone,
+    isDay,
+    resolvedTheme,
+    nextTransitionDate
+  };
+}
+
+/**
+ * Evaluates the auto theme using local time & timezone.
+ */
+export async function evaluateAutoTheme(date = new Date()) {
+  const status = getLocalTimeAutoStatus(date);
   currentAutoInfo = status;
   applyTheme(status.resolvedTheme, "auto");
   scheduleAutoTransition(status.nextTransitionDate);
@@ -206,17 +231,26 @@ export async function initTheme() {
     }
   }
 
-  // Periodic fallback check (e.g. waking up from sleep)
+  // Periodic fallback check (e.g. waking up from sleep or tab visibility change)
   if (typeof window !== "undefined") {
-    document.addEventListener("visibilitychange", async () => {
-      if (document.visibilityState === "visible") {
-        if (currentMode === "auto") {
-          await evaluateAutoTheme();
-        } else if (currentMode === "system") {
-          applyTheme(getSystemResolvedTheme(), "system");
-        }
+    const handleResume = async () => {
+      if (currentMode === "auto") {
+        await evaluateAutoTheme();
+      } else if (currentMode === "system") {
+        applyTheme(getSystemResolvedTheme(), "system");
       }
-    });
+    };
+
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+      document.addEventListener("visibilitychange", async () => {
+        if (document.visibilityState === "visible") {
+          await handleResume();
+        }
+      });
+    }
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("focus", handleResume);
+    }
   }
 
   if (currentMode === "light") {
@@ -224,11 +258,7 @@ export async function initTheme() {
   } else if (currentMode === "dark") {
     applyTheme("dark", "dark");
   } else if (currentMode === "auto") {
-    const res = await evaluateAutoTheme();
-    if (!res.success) {
-      // Fallback to system if coordinates missing
-      applyTheme(getSystemResolvedTheme(), "system");
-    }
+    await evaluateAutoTheme();
   } else {
     // Default system
     applyTheme(getSystemResolvedTheme(), "system");
@@ -238,11 +268,10 @@ export async function initTheme() {
 }
 
 /**
- * Sets theme mode with support for geolocation requests in auto mode.
+ * Sets theme mode with automatic local time support.
  *
  * @param {"system" | "light" | "dark" | "auto"} targetMode
  * @param {object} [options]
- * @param {boolean} [options.promptGeo=true]
  * @returns {Promise<{ mode: string, resolved: string, autoInfo: object | null, notice?: string }>}
  */
 export async function setThemeMode(targetMode, options = {}) {
@@ -261,51 +290,11 @@ export async function setThemeMode(targetMode, options = {}) {
     currentAutoInfo = null;
     applyTheme(getSystemResolvedTheme(), "system");
   } else if (targetMode === "auto") {
-    // Check if geolocation is supported
-    const geoApi = options.geolocation || (typeof navigator !== "undefined" ? navigator.geolocation : null);
-    if (!geoApi) {
-      notice = t("geoFailedNotice");
-      currentMode = "system";
-      currentAutoInfo = null;
-      applyTheme(getSystemResolvedTheme(), "system");
-    } else {
-      try {
-        const position = await new Promise((resolve, reject) => {
-          geoApi.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: false,
-            timeout: 8000,
-            maximumAge: 3600000
-          });
-        });
-
-        const lat = position.coords.latitude;
-        const lon = position.coords.longitude;
-        await saveCachedGeo(lat, lon);
-
-        const status = getAutoThemeStatus(lat, lon, new Date());
-        currentMode = "auto";
-        currentAutoInfo = status;
-        applyTheme(status.resolvedTheme, "auto");
-        scheduleAutoTransition(status.nextTransitionDate);
-      } catch (geoErr) {
-        console.warn("Geolocation request failed:", geoErr);
-        // Try fallback to existing cached geo
-        const cached = await getCachedGeo();
-        if (cached && typeof cached.lat === "number" && typeof cached.lon === "number") {
-          const status = getAutoThemeStatus(cached.lat, cached.lon, new Date());
-          currentMode = "auto";
-          currentAutoInfo = status;
-          applyTheme(status.resolvedTheme, "auto");
-          scheduleAutoTransition(status.nextTransitionDate);
-        } else {
-          // Fall back to system mode
-          notice = geoErr.code === 1 ? t("geoDeniedNotice") : t("geoFailedNotice");
-          currentMode = "system";
-          currentAutoInfo = null;
-          applyTheme(getSystemResolvedTheme(), "system");
-        }
-      }
-    }
+    currentMode = "auto";
+    const status = getLocalTimeAutoStatus(new Date());
+    currentAutoInfo = status;
+    applyTheme(status.resolvedTheme, "auto");
+    scheduleAutoTransition(status.nextTransitionDate);
   }
 
   // Persist mode to chrome.storage.local and localStorage

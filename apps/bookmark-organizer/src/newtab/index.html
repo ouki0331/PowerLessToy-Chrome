@@ -39,6 +39,12 @@
           <span id="themeBtnText">Theme</span>
         </button>
 
+        <!-- Background Header Action -->
+        <button id="bgHeaderBtn" class="btn btn-ghost btn-sm" title="Background" aria-haspopup="dialog" aria-expanded="false">
+          <span id="bgHeaderBtnIcon" aria-hidden="true"></span>
+          <span id="bgHeaderBtnText">Background</span>
+        </button>
+
         <!-- Backup & Import Actions -->
         <button id="importJsonBtn" class="btn btn-ghost btn-sm" title="Import bookmarks from JSON">
           <svg class="btn-svg-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -127,6 +133,17 @@
       </div>
 
       <div class="cat-manage-controls">
+        <div class="cat-sort-controls" id="catSortControls" role="group" aria-label="Sort groups">
+          <button id="sortMostUsedBtn" class="btn btn-ghost btn-sm btn-icon cat-sort-btn" type="button" data-sort="most_used" title="Sort by Most Used" aria-label="Sort by Most Used" aria-pressed="false">
+            <span class="icon-slot"></span>
+          </button>
+          <button id="sortRecentlyUsedBtn" class="btn btn-ghost btn-sm btn-icon cat-sort-btn" type="button" data-sort="recently_used" title="Sort by Recently Used" aria-label="Sort by Recently Used" aria-pressed="false">
+            <span class="icon-slot"></span>
+          </button>
+          <button id="sortCreatedBtn" class="btn btn-ghost btn-sm btn-icon cat-sort-btn" type="button" data-sort="created_at" title="Sort by Created Date" aria-label="Sort by Created Date" aria-pressed="false">
+            <span class="icon-slot"></span>
+          </button>
+        </div>
         <div id="catAdminButtons" style="display: none; gap: 6px;">
           <button id="renameCatBtn" class="btn btn-ghost btn-sm">Rename</button>
           <button id="deleteCatBtn" class="btn btn-ghost btn-sm danger">Delete</button>
@@ -155,6 +172,8 @@
         Create First Group
       </button>
     </div>
+
+    <div id="a11yAnnouncer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
   </main>
 
   <!-- Modal Container for Dialogs -->
