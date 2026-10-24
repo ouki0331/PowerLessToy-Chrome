@@ -88,9 +88,9 @@ export async function initBackgroundUI(elements, openModalFn, closeModalFn) {
   renderSvgIcon(elements.bgCategoryBtn?.querySelector(".icon-slot"), SVG_ICONS.categoryGrid);
   renderSvgIcon(elements.bgFreqBtn?.querySelector(".icon-slot"), SVG_ICONS.frequencyClock);
   renderSvgIcon(elements.bgInfoBtn?.querySelector(".icon-slot"), SVG_ICONS.infoCircle);
-  renderSvgIcon(elements.bgSettingsBtn?.querySelector(".icon-slot"), SVG_ICONS.manage);
-  renderSvgIcon(elements.bgDockTrigger?.querySelector(".icon-slot"), SVG_ICONS.sourceRandom);
-  renderSvgIcon(elements.bgToggleTrigger?.querySelector(".icon-slot"), SVG_ICONS.sourceRandom);
+  renderSvgIcon(elements.bgSettingsBtn?.querySelector(".icon-slot"), SVG_ICONS.settings);
+  renderSvgIcon(elements.bgDockTrigger?.querySelector(".icon-slot"), SVG_ICONS.dockCenter);
+  renderSvgIcon(elements.bgToggleTrigger?.querySelector(".icon-slot"), SVG_ICONS.dockCenter);
   renderSvgIcon(elements.bgHeaderBtn?.querySelector("#bgHeaderBtnIcon"), SVG_ICONS.wallpaper);
 
   // Dock Expand / Collapse behavior
@@ -299,13 +299,13 @@ export async function updateBackgroundUI(elements) {
   }
 
   if (elements.bgDockTrigger) {
-    renderSvgIcon(elements.bgDockTrigger.querySelector(".icon-slot"), sourceIcon);
-    elements.bgDockTrigger.setAttribute("aria-label", `${t("bgControlsLabel")} (${sourceLabel})`);
-    elements.bgDockTrigger.setAttribute("title", `${t("bgControlsLabel")} (${sourceLabel})`);
+    renderSvgIcon(elements.bgDockTrigger.querySelector(".icon-slot"), SVG_ICONS.dockCenter);
+    elements.bgDockTrigger.setAttribute("aria-label", t("bgControlsLabel"));
+    elements.bgDockTrigger.setAttribute("title", t("bgControlsLabel"));
   }
 
   if (elements.bgToggleTrigger) {
-    renderSvgIcon(elements.bgToggleTrigger.querySelector(".icon-slot"), sourceIcon);
+    renderSvgIcon(elements.bgToggleTrigger.querySelector(".icon-slot"), SVG_ICONS.dockCenter);
   }
 
   if (!config.enabled) {

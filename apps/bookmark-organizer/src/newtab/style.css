@@ -311,12 +311,78 @@ body {
   outline-offset: var(--focus-offset);
 }
 
-/* Icons */
+/* ==========================================================================
+   Quiet Glyph: Unified Apple-style SVG Icon System
+   ========================================================================== */
 .ui-icon {
   display: inline-block;
   vertical-align: middle;
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.8px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
+
+.ui-icon path,
+.ui-icon line,
+.ui-icon polyline,
+.ui-icon polygon,
+.ui-icon circle,
+.ui-icon rect {
+  stroke-width: inherit;
+}
+
+/* Compact Tier Icons (14x14px, stroke 1.8) */
+.ui-icon-compact,
+.btn-icon .ui-icon,
+.cat-sort-btn .ui-icon,
+.drag-handle-btn .ui-icon,
+.link-expand-btn .ui-icon,
+.expand-chevron {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.8px;
+}
+
+/* Brand Bookmark Icon (18x18px, stroke 1.8) */
+.brand-icon .ui-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.8px;
+}
+
+/* Empty State Folder Icon (44x44px, stroke 1.4) */
+.empty-icon-svg {
+  width: 44px;
+  height: 44px;
+  stroke-width: 1.4px;
+}
+
+/* Button Icon Slot Alignment */
+.icon-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn .icon-slot {
+  margin-right: 2px;
+}
+
+.btn .icon-slot:empty {
+  margin-right: 0;
+  display: none;
+}
+
+.category-action-btn .icon-slot {
+  margin-right: 4px;
+}
+
 .btn-svg-icon {
   margin-right: 2px;
   flex-shrink: 0;
@@ -550,6 +616,8 @@ body {
 }
 
 .cat-sort-btn {
+  min-width: 28px;
+  min-height: 28px;
   width: 28px;
   height: 28px;
   padding: 0;
@@ -570,9 +638,13 @@ body {
 }
 
 .cat-sort-btn[aria-pressed="true"] {
-  color: var(--primary);
+  color: #0071E3;
   background-color: var(--bg-segmented-active);
   box-shadow: var(--shadow-segmented);
+}
+
+[data-resolved-theme="dark"] .cat-sort-btn[aria-pressed="true"] {
+  color: #64D2FF;
 }
 
 /* ==========================================================================
@@ -664,12 +736,14 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  min-width: 28px;
+  min-height: 28px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: #FF9F0A;
   cursor: grab;
   border-radius: var(--radius-xs);
   transition: color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
@@ -685,7 +759,7 @@ body {
 .drag-handle-btn:active,
 .group-card.is-dragging .drag-handle-btn {
   color: #FF9F0A;
-  background-color: rgba(255, 159, 10, 0.14);
+  background-color: rgba(255, 159, 10, 0.16);
 }
 
 .drag-handle-btn:focus-visible {
@@ -836,8 +910,10 @@ body {
 }
 
 .link-expand-btn {
-  width: 22px;
-  height: 22px;
+  min-width: 28px;
+  min-height: 28px;
+  width: 28px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -860,15 +936,15 @@ body {
   outline-offset: 1px;
 }
 
-.link-expand-btn[aria-expanded="true"] .expand-chevron {
+.link-expand-btn[aria-expanded="true"] .expand-chevron,
+.link-expand-btn[aria-expanded="true"] .ui-icon {
   transform: rotate(180deg);
 }
 
 .expand-chevron {
-  transition: transform 0.15s ease;
-  width: 13px;
-  height: 13px;
-  fill: currentColor;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  width: 14px;
+  height: 14px;
 }
 
 /* Link Details Panel (VIEW-LINK-001) */
@@ -992,6 +1068,17 @@ body {
   white-space: nowrap;
 }
 
+button:disabled,
+.btn:disabled,
+.btn-icon:disabled,
+.cat-sort-btn:disabled,
+.drag-handle-btn:disabled,
+.link-expand-btn:disabled {
+  opacity: 0.55 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
 .btn:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
@@ -1041,8 +1128,10 @@ body {
 }
 
 .btn-icon {
-  width: 24px;
-  height: 24px;
+  min-width: 28px;
+  min-height: 28px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border-radius: var(--radius-xs);
   background: transparent;

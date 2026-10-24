@@ -149,9 +149,79 @@ if (typeof document !== "undefined" && document.addEventListener) {
 
   setupEventListeners();
   setupStorageSubscription();
+  initStaticIcons();
   await initWorkbench();
   await initBackgroundUI(elements, openModal, closeModal);
   });
+}
+
+function setElementButtonText(btn, text) {
+  if (!btn) return;
+  const textSpan = btn.querySelector(".btn-text");
+  if (textSpan) {
+    textSpan.textContent = text;
+  } else {
+    const iconSlot = btn.querySelector(".icon-slot");
+    if (iconSlot && typeof document !== "undefined") {
+      const span = document.createElement("span");
+      span.className = "btn-text";
+      span.textContent = text;
+      btn.replaceChildren(iconSlot, span);
+    } else {
+      btn.textContent = text;
+    }
+  }
+}
+
+function initStaticIcons() {
+  const brandIconEl = el("brandIcon");
+  if (brandIconEl) renderSvgIcon(brandIconEl, SVG_ICONS.bookmark);
+
+  const importIconEl = el("importBtnIcon");
+  if (importIconEl) renderSvgIcon(importIconEl, SVG_ICONS.import);
+
+  const exportIconEl = el("exportBtnIcon");
+  if (exportIconEl) renderSvgIcon(exportIconEl, SVG_ICONS.export);
+
+  const langIconEl = el("langBtnIcon");
+  if (langIconEl) renderSvgIcon(langIconEl, SVG_ICONS.globe);
+
+  const manageIconEl = el("manageBtnIcon");
+  if (manageIconEl) renderSvgIcon(manageIconEl, SVG_ICONS.manage);
+
+  const addCatIcon = elements.addCategoryBtn?.querySelector(".icon-slot");
+  if (addCatIcon) renderSvgIcon(addCatIcon, SVG_ICONS.circlePlus);
+
+  const addGrpIcon = elements.addGroupBtn?.querySelector(".icon-slot");
+  if (addGrpIcon) renderSvgIcon(addGrpIcon, SVG_ICONS.circlePlus);
+
+  const renameCatIcon = elements.renameCatBtn?.querySelector(".icon-slot");
+  if (renameCatIcon) renderSvgIcon(renameCatIcon, SVG_ICONS.edit);
+
+  const deleteCatIcon = elements.deleteCatBtn?.querySelector(".icon-slot");
+  if (deleteCatIcon) renderSvgIcon(deleteCatIcon, SVG_ICONS.trash);
+
+  const retryIcon = elements.retryLoadBtn?.querySelector(".icon-slot");
+  if (retryIcon) renderSvgIcon(retryIcon, SVG_ICONS.retry);
+
+  const undoBannerIcon = el("undoIconSlot");
+  if (undoBannerIcon) renderSvgIcon(undoBannerIcon, SVG_ICONS.checkCircle);
+
+  const undoBtnIcon = elements.undoImportBtn?.querySelector(".icon-slot");
+  if (undoBtnIcon) renderSvgIcon(undoBtnIcon, SVG_ICONS.undo);
+
+  const dismissUndoIcon = elements.dismissUndoBtn?.querySelector(".icon-slot") || elements.dismissUndoBtn;
+  if (dismissUndoIcon) renderSvgIcon(dismissUndoIcon, SVG_ICONS.close);
+
+  const emptyCatIcon = el("emptyCategoryIcon");
+  if (emptyCatIcon) renderSvgIcon(emptyCatIcon, SVG_ICONS.folder);
+
+  const createFirstGrpIcon = elements.createFirstGroupBtn?.querySelector(".icon-slot");
+  if (createFirstGrpIcon) renderSvgIcon(createFirstGrpIcon, SVG_ICONS.circlePlus);
+
+  renderSvgIcon(elements.sortMostUsedBtn?.querySelector(".icon-slot"), SVG_ICONS.sortMostUsed);
+  renderSvgIcon(elements.sortRecentlyUsedBtn?.querySelector(".icon-slot"), SVG_ICONS.sortRecentlyUsed);
+  renderSvgIcon(elements.sortCreatedBtn?.querySelector(".icon-slot"), SVG_ICONS.sortCreatedAt);
 }
 
 function updateI18nLabels() {
@@ -160,19 +230,19 @@ function updateI18nLabels() {
   if (elements.brandTitle) elements.brandTitle.textContent = t("appTitle");
   if (elements.tagline) elements.tagline.textContent = t("tagline");
   if (elements.manageBtnText) elements.manageBtnText.textContent = state.isManageMode ? t("doneManaging") : t("manageMode");
-  if (elements.addCategoryBtn) elements.addCategoryBtn.textContent = t("addCategory");
-  if (elements.addGroupBtn) elements.addGroupBtn.textContent = t("addGroup");
-  if (elements.renameCatBtn) elements.renameCatBtn.textContent = t("rename");
-  if (elements.deleteCatBtn) elements.deleteCatBtn.textContent = t("delete");
+  setElementButtonText(elements.addCategoryBtn, t("addCategory"));
+  setElementButtonText(elements.addGroupBtn, t("addGroup"));
+  setElementButtonText(elements.renameCatBtn, t("rename"));
+  setElementButtonText(elements.deleteCatBtn, t("delete"));
   if (elements.emptyCatTitle) elements.emptyCatTitle.textContent = t("noGroupsInCat");
   if (elements.emptyCatLead) elements.emptyCatLead.textContent = t("noGroupsLead");
-  if (elements.createFirstGroupBtn) elements.createFirstGroupBtn.textContent = t("createFirstGroup");
+  setElementButtonText(elements.createFirstGroupBtn, t("createFirstGroup"));
   if (elements.errorTitle) elements.errorTitle.textContent = t("loadErrorTitle");
   if (elements.errorDesc) elements.errorDesc.textContent = t("loadErrorDesc");
-  if (elements.retryLoadBtn) elements.retryLoadBtn.textContent = t("retry");
+  setElementButtonText(elements.retryLoadBtn, t("retry"));
   if (elements.importBtnText) elements.importBtnText.textContent = t("importBtn");
   if (elements.exportBtnText) elements.exportBtnText.textContent = t("exportBtn");
-  if (elements.undoImportBtn) elements.undoImportBtn.textContent = t("undoImportBtn");
+  setElementButtonText(elements.undoImportBtn, t("undoImportBtn"));
   if (elements.bgHeaderBtnText) elements.bgHeaderBtnText.textContent = t("bgButton");
   if (elements.sortMostUsedBtn) {
     elements.sortMostUsedBtn.title = t("sortMostUsed");
@@ -1260,8 +1330,16 @@ function createGroupCard(group) {
 
     const addLinkBtn = document.createElement("button");
     addLinkBtn.className = "btn btn-ghost btn-sm";
-    addLinkBtn.textContent = "+ Link";
+    const addLinkIcon = document.createElement("span");
+    addLinkIcon.className = "icon-slot";
+    renderSvgIcon(addLinkIcon, SVG_ICONS.addLink);
+    const addLinkText = document.createElement("span");
+    addLinkText.className = "btn-text";
+    addLinkText.textContent = "Link";
+    addLinkBtn.appendChild(addLinkIcon);
+    addLinkBtn.appendChild(addLinkText);
     addLinkBtn.title = t("addLink");
+    addLinkBtn.setAttribute("aria-label", `${t("addLink")} in ${group.name}`);
     addLinkBtn.addEventListener("click", () => openAddLinkModal(group.id));
 
     const renameBtn = document.createElement("button");
@@ -1303,7 +1381,14 @@ function createGroupCard(group) {
     if (state.isManageMode) {
       const quickAddBtn = document.createElement("button");
       quickAddBtn.className = "btn btn-ghost btn-sm";
-      quickAddBtn.textContent = t("addLink");
+      const quickAddIcon = document.createElement("span");
+      quickAddIcon.className = "icon-slot";
+      renderSvgIcon(quickAddIcon, SVG_ICONS.addLink);
+      const quickAddText = document.createElement("span");
+      quickAddText.className = "btn-text";
+      quickAddText.textContent = t("addLink");
+      quickAddBtn.appendChild(quickAddIcon);
+      quickAddBtn.appendChild(quickAddText);
       quickAddBtn.addEventListener("click", () => openAddLinkModal(group.id));
       emptyRow.appendChild(quickAddBtn);
     }
@@ -1502,11 +1587,7 @@ function createLinkItem(link, group) {
   );
   expandBtn.title = isExpanded ? t("collapseDetails") : t("expandDetails");
 
-  expandBtn.innerHTML = `
-    <svg class="expand-chevron" viewBox="0 0 20 20" aria-hidden="true" width="14" height="14">
-      <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" fill="currentColor"/>
-    </svg>
-  `;
+  renderSvgIcon(expandBtn, SVG_ICONS.chevronDown);
 
   expandBtn.addEventListener("click", (e) => {
     e.preventDefault();
@@ -1650,9 +1731,10 @@ function openModal(titleText, contentEl, onConfirm, confirmBtnText = t("save"), 
   title.className = "modal-title";
   title.textContent = titleText;
   const closeBtn = document.createElement("button");
-  closeBtn.className = "btn-icon";
-  closeBtn.textContent = "✕";
-  closeBtn.setAttribute("aria-label", "Close");
+  closeBtn.className = "btn-icon modal-close-btn";
+  closeBtn.setAttribute("aria-label", t("close") || "Close");
+  closeBtn.title = t("close") || "Close";
+  renderSvgIcon(closeBtn, SVG_ICONS.close);
   closeBtn.addEventListener("click", closeModal);
   header.appendChild(title);
   header.appendChild(closeBtn);

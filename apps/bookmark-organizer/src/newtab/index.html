@@ -23,11 +23,7 @@
   <header class="workbench-header" role="banner">
     <div class="header-container">
       <div class="brand-section">
-        <span class="brand-icon" aria-hidden="true">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
-          </svg>
-        </span>
+        <span class="brand-icon" id="brandIcon" aria-hidden="true"></span>
         <h1 class="brand-title" id="appBrandTitle">Bookmark Organizer</h1>
         <span class="brand-badge" id="appTagline">Quiet Workbench</span>
       </div>
@@ -35,44 +31,33 @@
       <div class="header-actions">
         <!-- Theme Action -->
         <button id="themeToggleBtn" class="btn btn-ghost btn-sm" title="Theme (Light / Dark / System / Auto)" aria-haspopup="dialog" aria-expanded="false">
-          <span id="themeBtnIcon" aria-hidden="true"></span>
+          <span id="themeBtnIcon" class="icon-slot" aria-hidden="true"></span>
           <span id="themeBtnText">Theme</span>
         </button>
 
         <!-- Background Header Action -->
         <button id="bgHeaderBtn" class="btn btn-ghost btn-sm" title="Background" aria-haspopup="dialog" aria-expanded="false">
-          <span id="bgHeaderBtnIcon" aria-hidden="true"></span>
+          <span id="bgHeaderBtnIcon" class="icon-slot" aria-hidden="true"></span>
           <span id="bgHeaderBtnText">Background</span>
         </button>
 
         <!-- Backup & Import Actions -->
         <button id="importJsonBtn" class="btn btn-ghost btn-sm" title="Import bookmarks from JSON">
-          <svg class="btn-svg-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
-            <polyline points="7 11 12 16 17 11"></polyline>
-            <line x1="12" y1="4" x2="12" y2="16"></line>
-          </svg>
+          <span id="importBtnIcon" class="icon-slot" aria-hidden="true"></span>
           <span id="importBtnText">Import JSON</span>
         </button>
         <button id="exportBackupBtn" class="btn btn-ghost btn-sm" title="Export full JSON backup">
-          <svg class="btn-svg-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
-            <polyline points="17 8 12 3 7 8"></polyline>
-            <line x1="12" y1="3" x2="12" y2="15"></line>
-          </svg>
+          <span id="exportBtnIcon" class="icon-slot" aria-hidden="true"></span>
           <span id="exportBtnText">Export Backup</span>
         </button>
         <input type="file" id="importFileInput" accept=".json,application/json" style="display: none;">
 
         <button id="langToggleBtn" class="btn btn-ghost btn-sm" title="Toggle Language (EN / JA)">
-          <svg class="btn-svg-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="2" y1="12" x2="22" y2="12"></line>
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-          </svg>
+          <span id="langBtnIcon" class="icon-slot" aria-hidden="true"></span>
           <span id="currentLangLabel">EN</span>
         </button>
         <button id="toggleManageBtn" class="btn btn-secondary btn-sm" aria-pressed="false">
+          <span id="manageBtnIcon" class="icon-slot" aria-hidden="true"></span>
           <span class="manage-active-indicator" id="manageIndicator" style="display: none;"></span>
           <span id="manageBtnText">Manage Content</span>
         </button>
@@ -87,7 +72,8 @@
         <!-- Rendered dynamically -->
       </div>
       <button id="addCategoryBtn" class="category-action-btn" style="display: none;">
-        + Add Category
+        <span class="icon-slot" aria-hidden="true"></span>
+        <span class="btn-text">+ Add Category</span>
       </button>
     </div>
   </nav>
@@ -100,27 +86,25 @@
         <span class="error-title" id="errorTitle">Unable to load data</span>
         <span class="error-desc" id="errorDesc">Your stored links have not been modified. Click retry to reload.</span>
       </div>
-      <button id="retryLoadBtn" class="btn btn-secondary btn-sm">Retry</button>
+      <button id="retryLoadBtn" class="btn btn-secondary btn-sm">
+        <span class="icon-slot" aria-hidden="true"></span>
+        <span class="btn-text">Retry</span>
+      </button>
     </div>
 
     <!-- Undo Import Success Banner -->
     <div id="undoBanner" class="undo-banner" style="display: none;" role="status">
       <div class="undo-content">
-        <span class="undo-icon" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-          </svg>
-        </span>
+        <span class="undo-icon icon-slot" id="undoIconSlot" aria-hidden="true"></span>
         <span id="undoBannerText" class="undo-text">Import completed.</span>
       </div>
       <div class="undo-actions">
-        <button id="undoImportBtn" class="btn btn-primary btn-sm">Undo This Import</button>
+        <button id="undoImportBtn" class="btn btn-primary btn-sm">
+          <span class="icon-slot" aria-hidden="true"></span>
+          <span class="btn-text">Undo This Import</span>
+        </button>
         <button id="dismissUndoBtn" class="btn btn-ghost btn-sm btn-icon" aria-label="Dismiss banner">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
+          <span class="icon-slot" aria-hidden="true"></span>
         </button>
       </div>
     </div>
@@ -145,11 +129,18 @@
           </button>
         </div>
         <div id="catAdminButtons" style="display: none; gap: 6px;">
-          <button id="renameCatBtn" class="btn btn-ghost btn-sm">Rename</button>
-          <button id="deleteCatBtn" class="btn btn-ghost btn-sm danger">Delete</button>
+          <button id="renameCatBtn" class="btn btn-ghost btn-sm">
+            <span class="icon-slot" aria-hidden="true"></span>
+            <span class="btn-text">Rename</span>
+          </button>
+          <button id="deleteCatBtn" class="btn btn-ghost btn-sm danger">
+            <span class="icon-slot" aria-hidden="true"></span>
+            <span class="btn-text">Delete</span>
+          </button>
         </div>
         <button id="addGroupBtn" class="btn btn-primary btn-sm">
-          + Add Group
+          <span class="icon-slot" aria-hidden="true"></span>
+          <span class="btn-text">+ Add Group</span>
         </button>
       </div>
     </div>
@@ -161,15 +152,12 @@
 
     <!-- Empty State for Category -->
     <div class="empty-state" id="categoryEmptyState" style="display: none;">
-      <div class="empty-state-icon" aria-hidden="true">
-        <svg class="empty-icon-svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-        </svg>
-      </div>
+      <div class="empty-state-icon" id="emptyCategoryIcon" aria-hidden="true"></div>
       <h3 class="empty-state-title" id="emptyCatTitle">No groups in this category yet.</h3>
       <p class="empty-state-lead" id="emptyCatLead">Create your first group to start organizing your project environments and links.</p>
       <button id="createFirstGroupBtn" class="btn btn-primary">
-        Create First Group
+        <span class="icon-slot" aria-hidden="true"></span>
+        <span class="btn-text">Create First Group</span>
       </button>
     </div>
 
