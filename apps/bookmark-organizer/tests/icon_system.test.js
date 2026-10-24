@@ -7,15 +7,92 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appDir = path.resolve(__dirname, "..");
 
+class FakeSvgNode {
+  constructor(namespaceURI, tagName, ownerDocument) {
+    this.namespaceURI = namespaceURI;
+    this.tagName = tagName;
+    this.ownerDocument = ownerDocument;
+    this.attributes = new Map();
+    this.children = [];
+  }
+
+  setAttribute(name, value) {
+    this.attributes.set(name, String(value));
+  }
+
+  getAttribute(name) {
+    return this.attributes.get(name) ?? null;
+  }
+
+  appendChild(child) {
+    this.children.push(child);
+    return child;
+  }
+
+  replaceChildren(...children) {
+    this.children = children;
+  }
+}
+
+class FakeSvgDocument {
+  createElementNS(namespaceURI, tagName) {
+    return new FakeSvgNode(namespaceURI, tagName, this);
+  }
+}
+
 describe("Bookmark Organizer - Quiet Glyph Apple-style Icon System", async () => {
   const iconsPath = path.join(appDir, "src", "newtab", "icons.js");
   const cssPath = path.join(appDir, "src", "newtab", "style.css");
   const htmlPath = path.join(appDir, "src", "newtab", "index.html");
+  const backgroundUiPath = path.join(appDir, "src", "newtab", "background-ui.js");
 
   const iconsModule = await import(`file://${iconsPath}`);
-  const { SVG_ICONS } = iconsModule;
+  const { SVG_ICONS, renderSvgIcon } = iconsModule;
+  const iconsContent = fs.readFileSync(iconsPath, "utf-8");
   const cssContent = fs.readFileSync(cssPath, "utf-8");
   const htmlContent = fs.readFileSync(htmlPath, "utf-8");
+  const backgroundUiContent = fs.readFileSync(backgroundUiPath, "utf-8");
+
+  it("renders a real SVG tree with createElementNS and never invokes DOMParser", () => {
+    assert.doesNotMatch(iconsContent, /new\s+DOMParser|DOMParser\s*\(/);
+    assert.match(iconsContent, /createElementNS\(SVG_NS, "svg"\)/);
+
+    const ownerDocument = new FakeSvgDocument();
+    const slot = new FakeSvgNode(null, "span", ownerDocument);
+    renderSvgIcon(slot, SVG_ICONS.dockCenter);
+
+    assert.equal(slot.children.length, 1, "renderer must replace the empty icon slot with one SVG");
+    const svg = slot.children[0];
+    assert.equal(svg.namespaceURI, "http://www.w3.org/2000/svg");
+    assert.equal(svg.tagName, "svg");
+    assert.equal(svg.getAttribute("viewBox"), "0 0 24 24");
+    assert.equal(svg.getAttribute("stroke"), "currentColor");
+    assert.equal(svg.getAttribute("aria-hidden"), "true");
+    assert.ok(svg.children.length >= 3, "dockCenter must render all of its visible child shapes");
+    assert.deepEqual(
+      svg.children.map((child) => child.tagName),
+      ["rect", "circle", "polyline"]
+    );
+  });
+
+  it("keeps the latest Dock consumer mappings intact", () => {
+    assert.match(
+      backgroundUiContent,
+      /bgDockTrigger\?\.querySelector\("\.icon-slot"\), SVG_ICONS\.dockCenter/
+    );
+    assert.match(
+      backgroundUiContent,
+      /bgSettingsBtn\?\.querySelector\("\.icon-slot"\), SVG_ICONS\.settings/
+    );
+    assert.match(
+      backgroundUiContent,
+      /const sourceIcon = isMyImages \? SVG_ICONS\.sourceMyImages : SVG_ICONS\.sourceRandom/
+    );
+    assert.doesNotMatch(
+      backgroundUiContent,
+      /bgDockTrigger\?\.querySelector\("\.icon-slot"\), SVG_ICONS\.sourceRandom/
+    );
+  });
 
   it("exports SVG_ICONS with all required Quiet Glyph icon keys", () => {
     const requiredKeys = [

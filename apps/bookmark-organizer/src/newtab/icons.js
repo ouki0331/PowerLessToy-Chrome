@@ -9,6 +9,11 @@
  * - Zero external CDN, zero emojis, zero font icons.
  */
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+const SVG_ROOT_PATTERN = /^<svg\b([^>]*)>([\s\S]*)<\/svg>$/;
+const SVG_CHILD_PATTERN = /<(path|line|polyline|polygon|circle|rect)\b([^>]*)>(?:\s*<\/\1>)?/g;
+const SVG_ATTRIBUTE_PATTERN = /([:\w-]+)\s*=\s*"([^"]*)"/g;
+
 export const SVG_ICONS = {
   // Brand / Workspace Bookmark (18x18, stroke 1.8)
   bookmark: `<svg class="ui-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -292,21 +297,37 @@ export const SVG_ICONS = {
   </svg>`
 };
 
+function applySvgAttributes(node, attributeSource) {
+  SVG_ATTRIBUTE_PATTERN.lastIndex = 0;
+  let match;
+  while ((match = SVG_ATTRIBUTE_PATTERN.exec(attributeSource)) !== null) {
+    node.setAttribute(match[1], match[2]);
+  }
+}
+
 /**
- * Safely renders an SVG string into a container without triggering
- * innerHTML linter warnings in AMO (web-ext lint).
+ * Renders one of the trusted local icon definitions with SVG DOM APIs.
+ * Avoiding DOMParser here is intentional: parser failures were previously
+ * swallowed and left every dynamic icon slot empty in the real extension.
  */
 export function renderSvgIcon(container, svgString) {
   if (!container || !svgString) return;
-  if (typeof DOMParser !== "undefined") {
-    try {
-      const doc = new DOMParser().parseFromString(svgString, "image/svg+xml");
-      const node = doc.documentElement;
-      if (node && typeof document !== "undefined" && document.importNode) {
-        container.replaceChildren(document.importNode(node, true));
-      }
-    } catch {
-      // Ignore parse failure
-    }
+  const doc = container.ownerDocument || (typeof document !== "undefined" ? document : null);
+  if (!doc?.createElementNS) return;
+
+  const rootMatch = svgString.trim().match(SVG_ROOT_PATTERN);
+  if (!rootMatch) return;
+
+  const svg = doc.createElementNS(SVG_NS, "svg");
+  applySvgAttributes(svg, rootMatch[1]);
+
+  SVG_CHILD_PATTERN.lastIndex = 0;
+  let childMatch;
+  while ((childMatch = SVG_CHILD_PATTERN.exec(rootMatch[2])) !== null) {
+    const child = doc.createElementNS(SVG_NS, childMatch[1]);
+    applySvgAttributes(child, childMatch[2]);
+    svg.appendChild(child);
   }
+
+  container.replaceChildren(svg);
 }
