@@ -7,6 +7,8 @@ import {
   setThemeMode,
   getThemeMode,
   getResolvedTheme,
+  saveCachedGeo,
+  getCachedGeo,
   applyTheme,
   clearTransitionTimer
 } from "../src/newtab/theme.js";
@@ -233,8 +235,8 @@ describe("Bookmark Organizer - Theme Selection and Persistence (VIEW-THEME-001 &
     // Seed initial workbench data
     await loadWorkbenchData();
 
-    // Store themes and legacy cached location directly in storage
-    mockChromeStorage[CACHED_GEO_KEY] = { lat: 35.6762, lon: 139.6503 };
+    // Store themes and location
+    await saveCachedGeo(35.6762, 139.6503);
     mockChromeStorage[THEME_MODE_KEY] = "auto";
 
     const backup = await exportBackup();
