@@ -21,6 +21,8 @@ import {
   saveLocalImage,
   getLocalImagesList,
   deleteLocalImage,
+  deleteLocalImageAndCascade,
+  setLocalImageAsBackground,
   getLocalImagesTotalSize,
   resolveImageDisplayUrl,
   revokeActiveBlobUrl,
@@ -78,7 +80,8 @@ export function setPopoverAriaState(elements, activeBtn = null) {
 export async function initBackgroundUI(elements, openModalFn, closeModalFn) {
   if (!elements || !elements.bgFab) return;
 
-  // Render icons on toolbar buttons and header button
+  // Render icons on dock buttons and header button
+  renderSvgIcon(elements.bgSourceBtn?.querySelector(".icon-slot"), SVG_ICONS.sourceRandom);
   renderSvgIcon(elements.bgFavBtn?.querySelector(".icon-slot"), SVG_ICONS.heart);
   renderSvgIcon(elements.bgNextBtn?.querySelector(".icon-slot"), SVG_ICONS.next);
   renderSvgIcon(elements.bgLockBtn?.querySelector(".icon-slot"), SVG_ICONS.unlock);
@@ -86,8 +89,67 @@ export async function initBackgroundUI(elements, openModalFn, closeModalFn) {
   renderSvgIcon(elements.bgFreqBtn?.querySelector(".icon-slot"), SVG_ICONS.frequencyClock);
   renderSvgIcon(elements.bgInfoBtn?.querySelector(".icon-slot"), SVG_ICONS.infoCircle);
   renderSvgIcon(elements.bgSettingsBtn?.querySelector(".icon-slot"), SVG_ICONS.manage);
-  renderSvgIcon(elements.bgToggleTrigger?.querySelector(".icon-slot"), SVG_ICONS.wallpaper);
+  renderSvgIcon(elements.bgDockTrigger?.querySelector(".icon-slot"), SVG_ICONS.sourceRandom);
+  renderSvgIcon(elements.bgToggleTrigger?.querySelector(".icon-slot"), SVG_ICONS.sourceRandom);
   renderSvgIcon(elements.bgHeaderBtn?.querySelector("#bgHeaderBtnIcon"), SVG_ICONS.wallpaper);
+
+  // Dock Expand / Collapse behavior
+  let dockCollapseTimer = null;
+
+  const expandDock = () => {
+    if (dockCollapseTimer) {
+      clearTimeout(dockCollapseTimer);
+      dockCollapseTimer = null;
+    }
+    if (elements.bgDock) {
+      elements.bgDock.classList.add("is-expanded");
+    }
+    elements.bgDockTrigger?.setAttribute("aria-expanded", "true");
+    elements.bgDockActions?.removeAttribute("aria-hidden");
+  };
+
+  const collapseDock = (immediate = false) => {
+    if (dockCollapseTimer) {
+      clearTimeout(dockCollapseTimer);
+      dockCollapseTimer = null;
+    }
+    // Retain expansion if focus is inside dock
+    if (typeof document !== "undefined" && elements.bgDock && elements.bgDock.contains(document.activeElement)) {
+      return;
+    }
+    if (immediate) {
+      if (elements.bgDock) {
+        elements.bgDock.classList.remove("is-expanded");
+      }
+      elements.bgDockTrigger?.setAttribute("aria-expanded", "false");
+      elements.bgDockActions?.setAttribute("aria-hidden", "true");
+    } else {
+      dockCollapseTimer = setTimeout(() => {
+        if (typeof document !== "undefined" && elements.bgDock && elements.bgDock.contains(document.activeElement)) {
+          return;
+        }
+        if (elements.bgDock) {
+          elements.bgDock.classList.remove("is-expanded");
+        }
+        elements.bgDockTrigger?.setAttribute("aria-expanded", "false");
+        elements.bgDockActions?.setAttribute("aria-hidden", "true");
+      }, 250);
+    }
+  };
+
+  elements.bgDock?.addEventListener("mouseenter", expandDock);
+  elements.bgDock?.addEventListener("mouseleave", () => collapseDock(false));
+  elements.bgDock?.addEventListener("focusin", expandDock);
+  elements.bgDock?.addEventListener("focusout", () => collapseDock(false));
+
+  elements.bgDockTrigger?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (elements.bgDock?.classList.contains("is-expanded")) {
+      collapseDock(true);
+    } else {
+      expandDock();
+    }
+  });
 
   // Bind Header Background button
   elements.bgHeaderBtn?.addEventListener("click", () => {
@@ -95,7 +157,37 @@ export async function initBackgroundUI(elements, openModalFn, closeModalFn) {
     openBgSettingsModal(elements, openModalFn, closeModalFn);
   });
 
-  // Bind FAB events
+  // Bind Source button
+  elements.bgSourceBtn?.addEventListener("click", async () => {
+    closeBgPopover(elements);
+    const config = await getBgConfig();
+    const currentMode = config.sourceMode || "random";
+    const targetMode = currentMode === "random" ? "my_images" : "random";
+
+    if (targetMode === "my_images") {
+      const localList = await getLocalImagesList();
+      if (localList.length === 0) {
+        // No local images uploaded: open settings modal and focus upload dropzone
+        openBgSettingsModal(elements, openModalFn, closeModalFn, { focusDropzone: true });
+        return;
+      }
+      config.sourceMode = "my_images";
+      config.enabled = true;
+      await saveBgConfig(config);
+      const nextImg = await getNextImage({ force: true });
+      await applyBackgroundImage(elements, nextImg);
+      await updateBackgroundUI(elements);
+    } else {
+      config.sourceMode = "random";
+      config.enabled = true;
+      await saveBgConfig(config);
+      const nextImg = await getNextImage({ force: true });
+      await applyBackgroundImage(elements, nextImg);
+      await updateBackgroundUI(elements);
+    }
+  });
+
+  // Bind Favorite button
   elements.bgFavBtn?.addEventListener("click", async () => {
     const current = await getBgCurrent();
     if (!current) return;
@@ -103,12 +195,14 @@ export async function initBackgroundUI(elements, openModalFn, closeModalFn) {
     updateFavButtonUI(elements.bgFavBtn, isNowFav);
   });
 
+  // Bind Next button
   elements.bgNextBtn?.addEventListener("click", async () => {
     closeBgPopover(elements);
     const next = await getNextImage({ force: true });
     await applyBackgroundImage(elements, next);
   });
 
+  // Bind Lock button
   elements.bgLockBtn?.addEventListener("click", async () => {
     const config = await getBgConfig();
     const updated = await saveBgConfig({ isImageLocked: !config.isImageLocked });
@@ -158,17 +252,21 @@ export async function initBackgroundUI(elements, openModalFn, closeModalFn) {
     });
   }
 
-  // Global listeners to close popovers on outside click or Escape
+  // Global listeners to close popovers and dock on outside click or Escape
   if (typeof document !== "undefined") {
     document.addEventListener("click", (e) => {
       if (activePopoverType && !e.target.closest("#bgFab") && !e.target.closest("#bgPopoverContainer") && !e.target.closest("#bgHeaderBtn")) {
         closeBgPopover(elements);
       }
+      if (elements.bgDock && !elements.bgDock.contains(e.target)) {
+        collapseDock(true);
+      }
     });
 
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && activePopoverType) {
-        closeBgPopover(elements);
+      if (e.key === "Escape") {
+        if (activePopoverType) closeBgPopover(elements);
+        collapseDock(true);
       }
     });
   }
@@ -184,13 +282,31 @@ export async function updateBackgroundUI(elements) {
   if (!elements) return;
   const config = await getBgConfig();
 
+  const isMyImages = config.sourceMode === "my_images";
+  const sourceIcon = isMyImages ? SVG_ICONS.sourceMyImages : SVG_ICONS.sourceRandom;
+  const sourceLabel = isMyImages ? t("bgSourceMyImages") : t("bgSourceRandom");
+
+  if (elements.bgSourceBtn) {
+    elements.bgSourceBtn.setAttribute("aria-label", `${t("bgSourceToggle")}: ${sourceLabel}`);
+    elements.bgSourceBtn.setAttribute("title", `${t("bgSourceToggle")}: ${sourceLabel}`);
+    renderSvgIcon(elements.bgSourceBtn.querySelector(".icon-slot"), sourceIcon);
+  }
+
+  if (elements.bgDockTrigger) {
+    renderSvgIcon(elements.bgDockTrigger.querySelector(".icon-slot"), sourceIcon);
+    elements.bgDockTrigger.setAttribute("aria-label", `${t("bgControlsLabel")} (${sourceLabel})`);
+    elements.bgDockTrigger.setAttribute("title", `${t("bgControlsLabel")} (${sourceLabel})`);
+  }
+
+  if (elements.bgToggleTrigger) {
+    renderSvgIcon(elements.bgToggleTrigger.querySelector(".icon-slot"), sourceIcon);
+  }
+
   if (!config.enabled) {
     if (elements.bgLayer) elements.bgLayer.style.display = "none";
     if (typeof document !== "undefined" && document.body) {
       document.body.classList.remove("has-custom-bg");
     }
-    if (elements.bgToolbar) elements.bgToolbar.style.display = "none";
-    if (elements.bgToggleTrigger) elements.bgToggleTrigger.style.display = "flex";
     return;
   }
 
@@ -199,8 +315,6 @@ export async function updateBackgroundUI(elements) {
   if (typeof document !== "undefined" && document.body) {
     document.body.classList.add("has-custom-bg");
   }
-  if (elements.bgToolbar) elements.bgToolbar.style.display = "flex";
-  if (elements.bgToggleTrigger) elements.bgToggleTrigger.style.display = "none";
 
   // Apply Opacity
   const opacityVal = Math.max(0, Math.min(100, config.opacity !== undefined ? config.opacity : 35));
@@ -552,8 +666,11 @@ export async function openInfoPopover(elements) {
 /**
  * Opens Background Settings Modal
  */
-export async function openBgSettingsModal(elements, openModalFn, closeModalFn) {
+export async function openBgSettingsModal(elements, openModalFn, closeModalFn, { focusDropzone = false } = {}) {
   const config = await getBgConfig();
+  let currentSourceMode = config.sourceMode || "random";
+  let selectedCats = Array.isArray(config.categories) && config.categories.length > 0 ? [...config.categories] : ["nature"];
+  let selectedFreq = config.frequency || "daily";
 
   const container = document.createElement("div");
   container.className = "bg-settings-form";
@@ -619,9 +736,100 @@ export async function openBgSettingsModal(elements, openModalFn, closeModalFn) {
   opacityRow.appendChild(rangeWrap);
   container.appendChild(opacityRow);
 
-  // 3. Local Images Section
+  // 3. Background Source Mode
+  const sourceSection = document.createElement("div");
+  sourceSection.className = "bg-setting-row";
+  const sourceLabelWrap = document.createElement("div");
+  const sourceTitle = document.createElement("div");
+  sourceTitle.className = "bg-setting-label";
+  sourceTitle.textContent = t("bgSourceLabel");
+  const sourceDesc = document.createElement("div");
+  sourceDesc.className = "bg-setting-desc";
+  sourceDesc.textContent = currentSourceMode === "my_images" ? t("bgSourceMyImagesDesc") : t("bgSourceRandomDesc");
+  sourceLabelWrap.appendChild(sourceTitle);
+  sourceLabelWrap.appendChild(sourceDesc);
+
+  const sourceControlWrap = document.createElement("div");
+  sourceControlWrap.className = "bg-source-segmented";
+  sourceControlWrap.style.display = "flex";
+  sourceControlWrap.style.gap = "6px";
+
+  const randomBtn = document.createElement("button");
+  randomBtn.type = "button";
+  randomBtn.className = `btn btn-sm ${currentSourceMode === "random" ? "btn-primary" : "btn-secondary"}`;
+  randomBtn.textContent = t("bgSourceRandom");
+
+  const myImagesBtn = document.createElement("button");
+  myImagesBtn.type = "button";
+  myImagesBtn.className = `btn btn-sm ${currentSourceMode === "my_images" ? "btn-primary" : "btn-secondary"}`;
+  myImagesBtn.textContent = t("bgSourceMyImages");
+
+  const updateSourceButtons = () => {
+    if (currentSourceMode === "random") {
+      randomBtn.className = "btn btn-sm btn-primary";
+      myImagesBtn.className = "btn btn-sm btn-secondary";
+      sourceDesc.textContent = t("bgSourceRandomDesc");
+    } else {
+      randomBtn.className = "btn btn-sm btn-secondary";
+      myImagesBtn.className = "btn btn-sm btn-primary";
+      sourceDesc.textContent = t("bgSourceMyImagesDesc");
+    }
+  };
+
+  randomBtn.addEventListener("click", () => {
+    currentSourceMode = "random";
+    updateSourceButtons();
+  });
+
+  myImagesBtn.addEventListener("click", async () => {
+    const list = await getLocalImagesList();
+    if (list.length === 0) {
+      uploadError.textContent = t("bgLocalEmpty");
+      uploadError.style.display = "block";
+      dropzone.focus();
+      return;
+    }
+    currentSourceMode = "my_images";
+    updateSourceButtons();
+  });
+
+  sourceControlWrap.appendChild(randomBtn);
+  sourceControlWrap.appendChild(myImagesBtn);
+  sourceSection.appendChild(sourceLabelWrap);
+  sourceSection.appendChild(sourceControlWrap);
+  container.appendChild(sourceSection);
+
+  // 4. Frequency Selection
+  const freqRow = document.createElement("div");
+  freqRow.className = "bg-setting-row";
+  const freqLabelWrap = document.createElement("div");
+  const freqTitle = document.createElement("div");
+  freqTitle.className = "bg-setting-label";
+  freqTitle.textContent = t("bgFrequencyLabel");
+  freqLabelWrap.appendChild(freqTitle);
+
+  const freqSelect = document.createElement("select");
+  freqSelect.className = "form-select";
+  freqSelect.style.padding = "4px 8px";
+  freqSelect.style.borderRadius = "var(--radius-sm, 6px)";
+  for (const f of FREQUENCY_KEYS) {
+    const opt = document.createElement("option");
+    opt.value = f.id;
+    opt.textContent = t(f.i18nKey);
+    if (f.id === selectedFreq) opt.selected = true;
+    freqSelect.appendChild(opt);
+  }
+  freqSelect.addEventListener("change", () => {
+    selectedFreq = freqSelect.value;
+  });
+
+  freqRow.appendChild(freqLabelWrap);
+  freqRow.appendChild(freqSelect);
+  container.appendChild(freqRow);
+
+  // 5. Local Images Section
   const localSection = document.createElement("div");
-  localSection.style.marginTop = "8px";
+  localSection.style.marginTop = "12px";
   localSection.style.display = "flex";
   localSection.style.flexDirection = "column";
   localSection.style.gap = "8px";
@@ -662,7 +870,18 @@ export async function openBgSettingsModal(elements, openModalFn, closeModalFn) {
     }
   });
 
+  const uploadError = document.createElement("div");
+  uploadError.className = "bg-upload-error";
+  uploadError.style.display = "none";
+  uploadError.style.color = "var(--danger)";
+  uploadError.style.fontSize = "12px";
+  uploadError.style.padding = "6px 10px";
+  uploadError.style.borderRadius = "var(--radius-sm, 6px)";
+  uploadError.style.background = "var(--danger-subtle, rgba(223, 56, 43, 0.08))";
+  uploadError.style.border = "1px solid var(--danger-border, rgba(223, 56, 43, 0.25))";
+
   localSection.appendChild(fileInput);
+  localSection.appendChild(uploadError);
   localSection.appendChild(dropzone);
 
   // Local images list container
@@ -686,6 +905,9 @@ export async function openBgSettingsModal(elements, openModalFn, closeModalFn) {
       return;
     }
 
+    const currentConfig = await getBgConfig();
+    const currentBg = await getBgCurrent();
+
     for (const item of list) {
       const row = document.createElement("div");
       row.className = "bg-local-item";
@@ -701,6 +923,38 @@ export async function openBgSettingsModal(elements, openModalFn, closeModalFn) {
       info.appendChild(name);
       info.appendChild(size);
 
+      const actionsWrap = document.createElement("div");
+      actionsWrap.className = "bg-local-item-actions";
+      actionsWrap.style.display = "flex";
+      actionsWrap.style.alignItems = "center";
+      actionsWrap.style.gap = "8px";
+
+      const isActive = currentConfig.sourceMode === "my_images" && (currentBg?.id === item.id || currentConfig.lastLocalImageId === item.id);
+
+      if (isActive) {
+        const activeBadge = document.createElement("span");
+        activeBadge.className = "bg-badge-current";
+        activeBadge.textContent = t("bgCurrentBackground");
+        actionsWrap.appendChild(activeBadge);
+      } else {
+        const setBtn = document.createElement("button");
+        setBtn.type = "button";
+        setBtn.className = "btn btn-secondary btn-sm";
+        setBtn.textContent = t("bgSetAsBackground");
+        setBtn.addEventListener("click", async () => {
+          const res = await setLocalImageAsBackground(item.id);
+          enableCheckbox.checked = true;
+          currentSourceMode = "my_images";
+          updateSourceButtons();
+          if (res?.image) {
+            await applyBackgroundImage(elements, res.image);
+          }
+          await updateBackgroundUI(elements);
+          await refreshLocalList();
+        });
+        actionsWrap.appendChild(setBtn);
+      }
+
       const delBtn = document.createElement("button");
       delBtn.type = "button";
       delBtn.className = "btn btn-ghost btn-sm btn-icon danger";
@@ -708,34 +962,43 @@ export async function openBgSettingsModal(elements, openModalFn, closeModalFn) {
       delBtn.setAttribute("title", t("bgDeleteImage"));
       renderSvgIcon(delBtn, SVG_ICONS.trash);
       delBtn.addEventListener("click", async () => {
-        await deleteLocalImage(item.id);
+        const res = await deleteLocalImageAndCascade(item.id);
+        if (res.switchedToNextLocal && res.image) {
+          await applyBackgroundImage(elements, res.image);
+        } else if (res.switchedToRandom && res.image) {
+          currentSourceMode = "random";
+          updateSourceButtons();
+          await applyBackgroundImage(elements, res.image);
+          uploadError.textContent = t("bgSwitchedToRandomNotice");
+          uploadError.style.display = "block";
+        }
+        await updateBackgroundUI(elements);
         await refreshLocalList();
       });
 
+      actionsWrap.appendChild(delBtn);
       row.appendChild(info);
-      row.appendChild(delBtn);
+      row.appendChild(actionsWrap);
       localListEl.appendChild(row);
     }
   };
-
-  const uploadError = document.createElement("div");
-  uploadError.className = "bg-upload-error";
-  uploadError.style.display = "none";
-  uploadError.style.color = "var(--danger)";
-  uploadError.style.fontSize = "12px";
-  uploadError.style.padding = "6px 10px";
-  uploadError.style.borderRadius = "var(--radius-sm, 6px)";
-  uploadError.style.background = "var(--danger-subtle, rgba(223, 56, 43, 0.08))";
-  uploadError.style.border = "1px solid var(--danger-border, rgba(223, 56, 43, 0.25))";
-  localSection.insertBefore(uploadError, dropzone);
 
   fileInput.addEventListener("change", async () => {
     const file = fileInput.files?.[0];
     if (!file) return;
     uploadError.style.display = "none";
     try {
-      await saveLocalImage(file);
+      const saved = await saveLocalImage(file);
       fileInput.value = "";
+      // Immediately enable, switch to My Images, apply, and persist
+      const res = await setLocalImageAsBackground(saved.id);
+      enableCheckbox.checked = true;
+      currentSourceMode = "my_images";
+      updateSourceButtons();
+      if (res?.image) {
+        await applyBackgroundImage(elements, res.image);
+      }
+      await updateBackgroundUI(elements);
       await refreshLocalList();
     } catch (err) {
       uploadError.textContent = err.message || t("bgLocalLimitExceeded");
@@ -748,6 +1011,12 @@ export async function openBgSettingsModal(elements, openModalFn, closeModalFn) {
 
   setPopoverAriaState(elements, elements?.bgHeaderBtn || elements?.bgSettingsBtn);
 
+  if (focusDropzone) {
+    setTimeout(() => {
+      dropzone.focus();
+    }, 80);
+  }
+
   // Open modal
   openModalFn(
     t("bgSettingsTitle"),
@@ -758,7 +1027,10 @@ export async function openBgSettingsModal(elements, openModalFn, closeModalFn) {
       const newOpacity = Number(opacityInput.value);
       await saveBgConfig({
         enabled: newEnabled,
-        opacity: newOpacity
+        opacity: newOpacity,
+        sourceMode: currentSourceMode,
+        frequency: selectedFreq,
+        categories: selectedCats
       });
       await updateBackgroundUI(elements);
       return true;

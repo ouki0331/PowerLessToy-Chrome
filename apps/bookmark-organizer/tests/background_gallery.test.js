@@ -17,6 +17,8 @@ import {
   getLocalImagesList,
   getLocalImageBlob,
   deleteLocalImage,
+  deleteLocalImageAndCascade,
+  setLocalImageAsBackground,
   getLocalImagesTotalSize,
   resetMemoryStorage,
   DEFAULT_BG_CONFIG,
@@ -323,5 +325,123 @@ describe("Bookmark Organizer - Keyless Background Gallery & Controls", () => {
     assert.equal(backupJson.includes("Cosmic Nebula"), false);
     assert.equal(backupJson.includes("Hubble"), false);
     assert.equal(backupJson.includes("isImageLocked"), false);
+  });
+
+  describe("Background Source Modes & User Upload Integration", () => {
+    it("sets uploaded local image immediately as active background and switches sourceMode to my_images", async () => {
+      const mockBlob = new Blob(["my-photo-pixels"], { type: "image/jpeg" });
+      const saved = await saveLocalImage(mockBlob);
+
+      const res = await setLocalImageAsBackground(saved.id);
+      assert.ok(res);
+      assert.equal(res.config.enabled, true);
+      assert.equal(res.config.sourceMode, "my_images");
+      assert.equal(res.config.lastLocalImageId, saved.id);
+
+      const current = await getBgCurrent();
+      assert.ok(current);
+      assert.equal(current.id, saved.id);
+      assert.equal(current.isLocal, true);
+    });
+
+    it("persists user-uploaded local background across reloads / getNextImage calls", async () => {
+      const mockBlob = new Blob(["persisted-pixels"], { type: "image/png" });
+      const saved = await saveLocalImage(mockBlob);
+      await setLocalImageAsBackground(saved.id);
+
+      // Subsequent getNextImage call (e.g. on new tab or reload) retains the local image
+      const nextImg = await getNextImage({ force: false });
+      assert.ok(nextImg);
+      assert.equal(nextImg.id, saved.id);
+      assert.equal(nextImg.isLocal, true);
+    });
+
+    it("switching to random mode keeps local images in IndexedDB and does NOT overwrite lastLocalImageId", async () => {
+      const mockBlob = new Blob(["photo-data"], { type: "image/jpeg" });
+      const saved = await saveLocalImage(mockBlob);
+      await setLocalImageAsBackground(saved.id);
+
+      // Switch to Random mode
+      await saveBgConfig({ sourceMode: "random" });
+
+      const randomImg = await getNextImage({ force: true, fetchFn: mockFetch });
+      assert.ok(randomImg);
+      assert.equal(randomImg.isLocal, undefined);
+
+      // Verify lastLocalImageId was preserved and local image remains in IndexedDB
+      const cfg = await getBgConfig();
+      assert.equal(cfg.lastLocalImageId, saved.id);
+
+      const localList = await getLocalImagesList();
+      assert.equal(localList.length > 0, true);
+      assert.ok(localList.some((img) => img.id === saved.id));
+    });
+
+    it("switching back to my_images restores last selected local image", async () => {
+      const mockBlob = new Blob(["photo-data"], { type: "image/jpeg" });
+      const saved = await saveLocalImage(mockBlob);
+      await setLocalImageAsBackground(saved.id);
+
+      // Temporarily switch to random
+      await saveBgConfig({ sourceMode: "random" });
+      await getNextImage({ force: true, fetchFn: mockFetch });
+
+      // Switch back to my_images
+      await saveBgConfig({ sourceMode: "my_images" });
+      const restored = await getNextImage({ force: false });
+      assert.ok(restored);
+      assert.equal(restored.id, saved.id);
+      assert.equal(restored.isLocal, true);
+    });
+
+    it("explicitly sets another local image as background when multiple images exist", async () => {
+      const b1 = new Blob(["pic-1"], { type: "image/jpeg" });
+      const b2 = new Blob(["pic-2"], { type: "image/jpeg" });
+      const s1 = await saveLocalImage(b1);
+      const s2 = await saveLocalImage(b2);
+
+      await setLocalImageAsBackground(s1.id);
+      let cur = await getBgCurrent();
+      assert.equal(cur.id, s1.id);
+
+      // Switch to second local image
+      await setLocalImageAsBackground(s2.id);
+      cur = await getBgCurrent();
+      assert.equal(cur.id, s2.id);
+      const cfg = await getBgConfig();
+      assert.equal(cfg.lastLocalImageId, s2.id);
+    });
+
+    it("deleting active local image cascades to remaining local image, or falls back to random when empty", async () => {
+      // Clear any leftover local images from prior tests to ensure exact counts
+      const existing = await getLocalImagesList();
+      for (const item of existing) {
+        await deleteLocalImage(item.id);
+      }
+
+      const b1 = new Blob(["pic-a"], { type: "image/jpeg" });
+      const b2 = new Blob(["pic-b"], { type: "image/jpeg" });
+      const s1 = await saveLocalImage(b1);
+      const s2 = await saveLocalImage(b2);
+
+      await setLocalImageAsBackground(s1.id);
+
+      // Delete active s1 -> cascades to s2
+      const cascadeRes = await deleteLocalImageAndCascade(s1.id, { fetchFn: mockFetch });
+      assert.equal(cascadeRes.wasActive, true);
+      assert.equal(cascadeRes.switchedToNextLocal, true);
+      assert.equal(cascadeRes.remainingCount, 1);
+      assert.equal(cascadeRes.image.id, s2.id);
+
+      // Delete remaining s2 -> falls back to random
+      const fallbackRes = await deleteLocalImageAndCascade(s2.id, { fetchFn: mockFetch });
+      assert.equal(fallbackRes.wasActive, true);
+      assert.equal(fallbackRes.switchedToRandom, true);
+      assert.equal(fallbackRes.remainingCount, 0);
+
+      const finalCfg = await getBgConfig();
+      assert.equal(finalCfg.sourceMode, "random");
+      assert.equal(finalCfg.lastLocalImageId, null);
+    });
   });
 });

@@ -112,7 +112,11 @@ const elements = {
   get bgImage() { return el("bgImage"); },
   get bgOverlay() { return el("bgOverlay"); },
   get bgFab() { return el("bgFab"); },
-  get bgToolbar() { return el("bgToolbar"); },
+  get bgDock() { return el("bgDock"); },
+  get bgDockActions() { return el("bgDockActions"); },
+  get bgDockTrigger() { return el("bgDockTrigger") || el("bgToggleTrigger"); },
+  get bgSourceBtn() { return el("bgSourceBtn"); },
+  get bgToolbar() { return el("bgDockActions") || el("bgToolbar"); },
   get bgFavBtn() { return el("bgFavBtn"); },
   get bgNextBtn() { return el("bgNextBtn"); },
   get bgLockBtn() { return el("bgLockBtn"); },
@@ -120,7 +124,7 @@ const elements = {
   get bgFreqBtn() { return el("bgFreqBtn"); },
   get bgInfoBtn() { return el("bgInfoBtn"); },
   get bgSettingsBtn() { return el("bgSettingsBtn"); },
-  get bgToggleTrigger() { return el("bgToggleTrigger"); },
+  get bgToggleTrigger() { return el("bgDockTrigger") || el("bgToggleTrigger"); },
   get bgPopoverContainer() { return el("bgPopoverContainer"); },
   get bgHeaderBtn() { return el("bgHeaderBtn"); },
   get bgHeaderBtnText() { return el("bgHeaderBtnText"); },
@@ -1015,6 +1019,19 @@ async function renderGroups() {
   });
 }
 
+function exitAutoSortIfActive() {
+  const activeCat = getActiveCategory();
+  if (activeCat && getCategorySortMode(activeCat.id) !== "manual") {
+    setCategorySortMode(activeCat.id, "manual");
+    elements.sortMostUsedBtn?.setAttribute("aria-pressed", "false");
+    elements.sortRecentlyUsedBtn?.setAttribute("aria-pressed", "false");
+    elements.sortCreatedBtn?.setAttribute("aria-pressed", "false");
+    announceA11y(t("switchedToManualSort"));
+    return true;
+  }
+  return false;
+}
+
 function setupDragHandleEvents(dragHandle, card, group) {
   dragHandle.addEventListener("dragstart", (e) => {
     currentDraggedGroupId = group.id;
@@ -1023,13 +1040,7 @@ function setupDragHandleEvents(dragHandle, card, group) {
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("text/plain", group.id);
     }
-    const activeCat = getActiveCategory();
-    if (activeCat && getCategorySortMode(activeCat.id) !== "manual") {
-      setCategorySortMode(activeCat.id, "manual");
-      elements.sortMostUsedBtn?.setAttribute("aria-pressed", "false");
-      elements.sortRecentlyUsedBtn?.setAttribute("aria-pressed", "false");
-      elements.sortCreatedBtn?.setAttribute("aria-pressed", "false");
-    }
+    exitAutoSortIfActive();
   });
 
   dragHandle.addEventListener("dragend", () => {
@@ -1045,13 +1056,7 @@ function setupDragHandleEvents(dragHandle, card, group) {
     if (e.touches.length !== 1) return;
     currentDraggedGroupId = group.id;
     card.classList.add("is-dragging");
-    const activeCat = getActiveCategory();
-    if (activeCat && getCategorySortMode(activeCat.id) !== "manual") {
-      setCategorySortMode(activeCat.id, "manual");
-      elements.sortMostUsedBtn?.setAttribute("aria-pressed", "false");
-      elements.sortRecentlyUsedBtn?.setAttribute("aria-pressed", "false");
-      elements.sortCreatedBtn?.setAttribute("aria-pressed", "false");
-    }
+    exitAutoSortIfActive();
   }, { passive: true });
 
   dragHandle.addEventListener("touchmove", (e) => {
@@ -1086,7 +1091,7 @@ function setupDragHandleEvents(dragHandle, card, group) {
       const targetGroupId = overCard.dataset.groupId;
       const activeCat = getActiveCategory();
       if (activeCat && targetGroupId) {
-        setCategorySortMode(activeCat.id, "manual");
+        exitAutoSortIfActive();
         const catGroups = state.data.groups
           .filter((g) => g.categoryId === activeCat.id)
           .sort((a, b) => (a.sortOrder ?? a.createdAt ?? 0) - (b.sortOrder ?? b.createdAt ?? 0));
@@ -1119,11 +1124,7 @@ function setupDragHandleEvents(dragHandle, card, group) {
     const activeCat = getActiveCategory();
     if (!activeCat) return;
 
-    // Exit auto-sort
-    setCategorySortMode(activeCat.id, "manual");
-    elements.sortMostUsedBtn?.setAttribute("aria-pressed", "false");
-    elements.sortRecentlyUsedBtn?.setAttribute("aria-pressed", "false");
-    elements.sortCreatedBtn?.setAttribute("aria-pressed", "false");
+    exitAutoSortIfActive();
 
     const catGroups = state.data.groups
       .filter((g) => g.categoryId === activeCat.id)
@@ -1187,7 +1188,7 @@ function setupCardDropEvents(card, group) {
     const activeCat = getActiveCategory();
     if (!activeCat) return;
 
-    setCategorySortMode(activeCat.id, "manual");
+    exitAutoSortIfActive();
 
     const catGroups = state.data.groups
       .filter((g) => g.categoryId === activeCat.id)

@@ -150,6 +150,16 @@ const translations = {
     bgLocalQuotaExceeded: "Total images exceed 50MB quota.",
     bgDeleteImage: "Delete",
     bgClose: "Close",
+    bgSourceRandom: "Random",
+    bgSourceMyImages: "My Images",
+    bgSourceRandomDesc: "Curated online random images",
+    bgSourceMyImagesDesc: "Your uploaded local images",
+    bgSetAsBackground: "Set as Background",
+    bgCurrentBackground: "Current Background",
+    bgSwitchedToRandomNotice: "Switched to Random mode because no local images remain.",
+    switchedToManualSort: "Switched to manual sort",
+    bgSourceToggle: "Switch Background Source",
+    bgControlsLabel: "Background Controls",
 
     // Group Sorting & Manual Drag Reordering
     sortMostUsed: "Sort by Most Used",
@@ -305,6 +315,16 @@ const translations = {
     bgLocalQuotaExceeded: "ローカル画像の合計容量が50MBの上限を超えています。",
     bgDeleteImage: "削除",
     bgClose: "閉じる",
+    bgSourceRandom: "ランダム画像",
+    bgSourceMyImages: "マイ画像",
+    bgSourceRandomDesc: "オンラインの厳選ランダム画像",
+    bgSourceMyImagesDesc: "アップロードしたローカル画像",
+    bgSetAsBackground: "背景に設定",
+    bgCurrentBackground: "現在の背景",
+    bgSwitchedToRandomNotice: "ローカル画像がないため、ランダム画像に切り替えました。",
+    switchedToManualSort: "手動並び替えに切り替えました",
+    bgSourceToggle: "画像ソースを切り替え",
+    bgControlsLabel: "背景コントロール",
 
     // Group Sorting & Manual Drag Reordering
     sortMostUsed: "よく使う順",

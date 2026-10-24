@@ -182,35 +182,33 @@
   <!-- Background Popover Menu Container -->
   <div id="bgPopoverContainer" class="bg-popover-container" style="display: none;"></div>
 
-  <!-- Floating Action Bar (Bottom Right) -->
+  <!-- Floating Action Dock (Bottom Right) -->
   <aside id="bgFab" class="bg-fab" aria-label="Background Controls">
-    <div id="bgToolbar" class="bg-toolbar" style="display: none;">
-      <button id="bgFavBtn" class="bg-fab-btn" type="button" aria-label="Add to Favorites" title="Add to Favorites">
-        <span class="icon-slot"></span>
-      </button>
-      <button id="bgNextBtn" class="bg-fab-btn" type="button" aria-label="Next Image" title="Next Image">
-        <span class="icon-slot"></span>
-      </button>
-      <button id="bgLockBtn" class="bg-fab-btn" type="button" aria-label="Lock Current Image" title="Lock Current Image">
-        <span class="icon-slot"></span>
-      </button>
-      <button id="bgCategoryBtn" class="bg-fab-btn" type="button" aria-label="Category" title="Category" aria-haspopup="dialog" aria-expanded="false">
-        <span class="icon-slot"></span>
-      </button>
-      <button id="bgFreqBtn" class="bg-fab-btn" type="button" aria-label="Frequency" title="Frequency" aria-haspopup="dialog" aria-expanded="false">
-        <span class="icon-slot"></span>
-      </button>
-      <button id="bgInfoBtn" class="bg-fab-btn" type="button" aria-label="Image Information" title="Image Information" aria-haspopup="dialog" aria-expanded="false">
-        <span class="icon-slot"></span>
-      </button>
-      <button id="bgSettingsBtn" class="bg-fab-btn" type="button" aria-label="Background Settings" title="Background Settings" aria-haspopup="dialog" aria-expanded="false">
+    <div id="bgDock" class="bg-dock" role="toolbar" aria-label="Background Controls">
+      <div id="bgDockActions" class="bg-dock-actions" aria-hidden="true">
+        <button id="bgSourceBtn" class="bg-dock-btn" type="button" aria-label="Background Source" title="Background Source">
+          <span class="icon-slot"></span>
+        </button>
+        <button id="bgFavBtn" class="bg-dock-btn" type="button" aria-label="Add to Favorites" title="Add to Favorites">
+          <span class="icon-slot"></span>
+        </button>
+        <button id="bgNextBtn" class="bg-dock-btn" type="button" aria-label="Next Image" title="Next Image">
+          <span class="icon-slot"></span>
+        </button>
+        <button id="bgLockBtn" class="bg-dock-btn" type="button" aria-label="Lock Current Image" title="Lock Current Image">
+          <span class="icon-slot"></span>
+        </button>
+        <button id="bgInfoBtn" class="bg-dock-btn" type="button" aria-label="Image Information" title="Image Information" aria-haspopup="dialog" aria-expanded="false">
+          <span class="icon-slot"></span>
+        </button>
+        <button id="bgSettingsBtn" class="bg-dock-btn" type="button" aria-label="Background Settings" title="Background Settings" aria-haspopup="dialog" aria-expanded="false">
+          <span class="icon-slot"></span>
+        </button>
+      </div>
+      <button id="bgDockTrigger" class="bg-dock-trigger" type="button" aria-label="Background Controls" title="Background Controls" aria-expanded="false">
         <span class="icon-slot"></span>
       </button>
     </div>
-    <!-- Compact trigger when background is OFF or toolbar collapsed -->
-    <button id="bgToggleTrigger" class="bg-toggle-trigger" type="button" aria-label="Background Settings" title="Background Settings" aria-haspopup="dialog" aria-expanded="false">
-      <span class="icon-slot"></span>
-    </button>
   </aside>
 
   <script type="module" src="app.js"></script>

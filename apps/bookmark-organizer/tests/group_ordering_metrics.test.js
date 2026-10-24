@@ -102,6 +102,40 @@ describe("Bookmark Organizer - Group Ordering, Sorting & Usage Metrics", () => {
       assert.equal(catGroups[1].id, g1.id);
       assert.equal(catGroups[2].id, g2.id);
     });
+
+    it("dragging/reordering groups maintains manual order without writing temporary auto-sort positions", async () => {
+      const data = await loadWorkbenchData();
+      const catId = data.categories[0].id;
+
+      const g1 = await addGroup(data, catId, "Group 1");
+      const g2 = await addGroup(data, catId, "Group 2");
+      const g3 = await addGroup(data, catId, "Group 3");
+
+      // Record clicks on g2 so that in 'most-used' auto-sort mode, g2 is at the top
+      await recordGroupClick(g2.id);
+      await recordGroupClick(g2.id);
+
+      const metricsMap = await getGroupMetricsMap();
+      assert.equal(metricsMap.get(g2.id).usageCount, 2);
+
+      // Verify that data in storage still preserves manual sortOrder (g1=1, g2=2, g3=3)
+      const freshData = await loadWorkbenchData();
+      assert.equal(freshData.groups.find((g) => g.id === g1.id).sortOrder, 1);
+      assert.equal(freshData.groups.find((g) => g.id === g2.id).sortOrder, 2);
+      assert.equal(freshData.groups.find((g) => g.id === g3.id).sortOrder, 3);
+
+      // Now simulate a drag reorder of manual groups (moving g3 before g1)
+      await reorderGroups(freshData, catId, [g3.id, g1.id, g2.id]);
+
+      const afterDragData = await loadWorkbenchData();
+      const reloadedGroups = afterDragData.groups
+        .filter((g) => g.categoryId === catId)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+
+      assert.equal(reloadedGroups[0].id, g3.id);
+      assert.equal(reloadedGroups[1].id, g1.id);
+      assert.equal(reloadedGroups[2].id, g2.id);
+    });
   });
 
   describe("Group Usage Metrics Tracking", () => {

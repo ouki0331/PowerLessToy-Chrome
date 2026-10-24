@@ -24,6 +24,8 @@ import {
 
 export const DEFAULT_BG_CONFIG = {
   enabled: false,
+  sourceMode: "random", // "random" | "my_images"
+  lastLocalImageId: null,
   opacity: 35,
   frequency: "daily", // 'manual' | 'tab' | 'daily' | 'weekly'
   categories: ["nature"],
@@ -699,6 +701,10 @@ export function shouldSwitchImage(config, currentImage) {
   if (config.isImageLocked) return false;
   if (!currentImage) return true;
 
+  // Source mode mismatch requires switching
+  if (config.sourceMode === "random" && currentImage.isLocal) return true;
+  if (config.sourceMode === "my_images" && !currentImage.isLocal) return true;
+
   if (config.frequency === "manual") {
     return false;
   }
@@ -732,6 +738,66 @@ export async function getNextImage({ force = false, fetchFn = fetch } = {}) {
   }
 
   const current = await getBgCurrent();
+
+  // 1. My Images Mode
+  if (config.sourceMode === "my_images") {
+    const localList = await getLocalImagesList();
+    if (localList.length === 0) {
+      // Local images emptied out, auto fallback to random
+      config.sourceMode = "random";
+      config.lastLocalImageId = null;
+      await saveBgConfig(config);
+      const fallbackRecord = await getNextImage({ force: true, fetchFn });
+      return {
+        ...fallbackRecord,
+        fallbackFromLocal: true
+      };
+    }
+
+    if (!force && !shouldSwitchImage(config, current) && current?.isLocal && localList.some((img) => img.id === current.id)) {
+      return current;
+    }
+
+    let chosen = null;
+    if (force && current?.id && localList.length > 1) {
+      const curIdx = localList.findIndex((img) => img.id === current.id);
+      const nextIdx = curIdx >= 0 ? (curIdx + 1) % localList.length : 0;
+      chosen = localList[nextIdx];
+    } else if (config.lastLocalImageId) {
+      chosen = localList.find((img) => img.id === config.lastLocalImageId);
+    }
+
+    if (!chosen) {
+      chosen = localList[0];
+    }
+
+    if (config.lastLocalImageId !== chosen.id) {
+      config.lastLocalImageId = chosen.id;
+      await saveBgConfig(config);
+    }
+
+    const todayStr = getLocalDateKey(new Date());
+    const nextRecord = {
+      id: chosen.id,
+      title: chosen.name || "Local Image",
+      artist: "Local User Upload",
+      thumbUrl: "",
+      originalUrl: "",
+      commonsUrl: "",
+      license: "Local Private Image",
+      licenseUrl: "",
+      category: "local",
+      isLocal: true,
+      createdAt: chosen.createdAt || 0,
+      updatedAt: Date.now(),
+      dateKey: todayStr
+    };
+
+    await saveBgCurrent(nextRecord);
+    return nextRecord;
+  }
+
+  // 2. Random Mode (never overwrites config.lastLocalImageId)
   if (!force && !shouldSwitchImage(config, current)) {
     return current;
   }
@@ -826,3 +892,81 @@ export async function getNextImage({ force = false, fetchFn = fetch } = {}) {
   await saveBgCurrent(nextRecord);
   return nextRecord;
 }
+
+/**
+ * Explicitly sets a local image as the active background.
+ * Enables background, sets source to 'my_images', sets as lastLocalImageId, and saves.
+ */
+export async function setLocalImageAsBackground(imageId) {
+  const localList = await getLocalImagesList();
+  const target = localList.find((item) => item.id === imageId);
+  if (!target) return null;
+
+  const config = await getBgConfig();
+  config.enabled = true;
+  config.sourceMode = "my_images";
+  config.lastLocalImageId = target.id;
+  await saveBgConfig(config);
+
+  const todayStr = getLocalDateKey(new Date());
+  const localRecord = {
+    id: target.id,
+    title: target.name || "Local Image",
+    artist: "Local User Upload",
+    thumbUrl: "",
+    originalUrl: "",
+    commonsUrl: "",
+    license: "Local Private Image",
+    licenseUrl: "",
+    category: "local",
+    isLocal: true,
+    createdAt: target.createdAt || 0,
+    updatedAt: Date.now(),
+    dateKey: todayStr
+  };
+  await saveBgCurrent(localRecord);
+  return { config, image: localRecord };
+}
+
+/**
+ * Deletes a local image and cascades background selection if it was active.
+ */
+export async function deleteLocalImageAndCascade(id, { fetchFn = fetch } = {}) {
+  await deleteLocalImage(id);
+  const remainingList = await getLocalImagesList();
+  const config = await getBgConfig();
+  const current = await getBgCurrent();
+
+  const wasActive = config.sourceMode === "my_images" && (config.lastLocalImageId === id || current?.id === id);
+
+  if (!wasActive) {
+    if (config.lastLocalImageId === id) {
+      config.lastLocalImageId = remainingList.length > 0 ? remainingList[0].id : null;
+      await saveBgConfig(config);
+    }
+    return { wasActive: false, remainingCount: remainingList.length };
+  }
+
+  if (remainingList.length > 0) {
+    const nextLocal = remainingList[0];
+    const { image } = await setLocalImageAsBackground(nextLocal.id);
+    return {
+      wasActive: true,
+      switchedToNextLocal: true,
+      remainingCount: remainingList.length,
+      image
+    };
+  } else {
+    config.sourceMode = "random";
+    config.lastLocalImageId = null;
+    await saveBgConfig(config);
+    const nextRand = await getNextImage({ force: true, fetchFn });
+    return {
+      wasActive: true,
+      switchedToRandom: true,
+      remainingCount: 0,
+      image: nextRand
+    };
+  }
+}
+

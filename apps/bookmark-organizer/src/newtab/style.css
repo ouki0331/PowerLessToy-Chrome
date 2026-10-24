@@ -579,17 +579,45 @@ body {
   border-color: var(--border-strong);
 }
 
+.group-card {
+  position: relative;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.18s ease,
+              box-shadow 0.18s ease,
+              border-color 0.18s ease;
+}
+
 .group-card.is-dragging {
   opacity: 0.45;
-  border: 1px dashed var(--primary);
+  border: 1.5px dashed #FF9F0A !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: scale(0.98);
 }
 
-.group-card.drop-target-before {
-  border-top: 2px solid var(--primary);
+.group-card.drop-target-before::before {
+  content: "";
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #FF9F0A;
+  border-radius: 2px;
+  box-shadow: 0 0 10px rgba(255, 159, 10, 0.6);
+  z-index: 10;
 }
 
-.group-card.drop-target-after {
-  border-bottom: 2px solid var(--primary);
+.group-card.drop-target-after::after {
+  content: "";
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #FF9F0A;
+  border-radius: 2px;
+  box-shadow: 0 0 10px rgba(255, 159, 10, 0.6);
+  z-index: 10;
 }
 
 .group-card-header {
@@ -614,15 +642,15 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: none;
   background: transparent;
   color: var(--text-muted);
   cursor: grab;
   border-radius: var(--radius-xs);
-  transition: color 0.15s ease, background 0.15s ease;
+  transition: color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
   flex-shrink: 0;
 }
 
@@ -630,13 +658,16 @@ body {
   cursor: grabbing;
 }
 
-.drag-handle-btn:hover {
-  color: var(--text-main);
-  background-color: var(--bg-hover);
+.drag-handle-btn:hover,
+.drag-handle-btn:focus-visible,
+.drag-handle-btn:active,
+.group-card.is-dragging .drag-handle-btn {
+  color: #FF9F0A;
+  background-color: rgba(255, 159, 10, 0.14);
 }
 
 .drag-handle-btn:focus-visible {
-  outline: var(--focus-ring);
+  outline: 2px solid #FF9F0A;
   outline-offset: 1px;
 }
 
@@ -1499,7 +1530,7 @@ body.has-custom-bg .group-card-header {
   background: transparent;
 }
 
-/* Floating Action Bar */
+/* Floating Action Dock (High-contrast Dark Frosted Glass) */
 .bg-fab {
   position: fixed;
   bottom: 20px;
@@ -1507,89 +1538,141 @@ body.has-custom-bg .group-card-header {
   z-index: 850;
   display: flex;
   align-items: center;
-  gap: 8px;
 }
 
-.bg-toolbar {
+.bg-dock {
   display: flex;
   align-items: center;
-  gap: 3px;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(23, 25, 29, 0.94);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 9999px;
   padding: 4px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
 }
 
-[data-resolved-theme="dark"] .bg-toolbar {
-  background: rgba(44, 44, 46, 0.85);
-  border-color: rgba(255, 255, 255, 0.14);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+.bg-dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(8px);
+  overflow: hidden;
+  pointer-events: none;
+  transition: max-width 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.18s ease,
+              transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.bg-dock.is-expanded .bg-dock-actions {
+  max-width: 320px;
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.bg-dock-btn,
+.bg-dock-trigger,
 .bg-fab-btn,
 .bg-toggle-trigger {
-  width: 32px;
-  height: 32px;
+  min-width: 36px;
+  min-height: 36px;
+  width: 36px;
+  height: 36px;
   border-radius: 9999px;
   border: none;
   background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
+  color: #FFB547;
   cursor: pointer;
   padding: 0;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
+.bg-dock-trigger,
 .bg-toggle-trigger {
-  width: 36px;
-  height: 36px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-subtle);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  min-width: 40px;
+  min-height: 40px;
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
-[data-resolved-theme="dark"] .bg-toggle-trigger {
-  background: rgba(44, 44, 46, 0.85);
-  border-color: rgba(255, 255, 255, 0.14);
-}
-
+.bg-dock-btn:hover,
+.bg-dock-trigger:hover,
 .bg-fab-btn:hover,
 .bg-toggle-trigger:hover {
-  background: var(--bg-hover);
-  color: var(--text-main);
-  transform: translateY(-1px);
+  color: #FFD28A;
+  background-color: rgba(255, 255, 255, 0.14);
 }
 
+.bg-dock-btn:focus-visible,
+.bg-dock-trigger:focus-visible,
 .bg-fab-btn:focus-visible,
 .bg-toggle-trigger:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid #FF9F0A;
   outline-offset: 2px;
 }
 
+.bg-dock-btn:active,
+.bg-dock-trigger:active,
 .bg-fab-btn:active,
 .bg-toggle-trigger:active {
-  transform: translateY(0);
+  transform: scale(0.95);
 }
 
+/* Active Source or State */
+.bg-dock-btn.is-active,
+.bg-dock-trigger.is-active {
+  background-color: #FF9F0A;
+  color: #17191D;
+}
+
+.bg-dock-btn.is-active:hover,
+.bg-dock-trigger.is-active:hover {
+  background-color: #FFB547;
+  color: #17191D;
+}
+
+/* Favorited state (heart) */
+.bg-dock-btn.is-favorited,
 .bg-fab-btn.is-favorited {
-  color: #ff2d55;
+  color: #FF5C7A;
 }
 
+.bg-dock-btn.is-favorited:hover,
+.bg-fab-btn.is-favorited:hover {
+  color: #FF7B94;
+}
+
+/* Locked state */
+.bg-dock-btn.is-locked,
 .bg-fab-btn.is-locked {
-  color: var(--primary);
-  background: var(--primary-subtle);
+  background-color: rgba(255, 159, 10, 0.22);
+  color: #FF9F0A;
 }
 
 .text-favorited {
-  color: #ff2d55;
+  color: #FF5C7A;
+}
+
+.bg-badge-current {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #17191D;
+  background-color: #FFB547;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  letter-spacing: -0.01em;
 }
 
 /* Background Popovers */
