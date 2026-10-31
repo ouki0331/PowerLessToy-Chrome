@@ -2125,3 +2125,702 @@ body.has-custom-bg .group-card-header {
   border: 0;
 }
 
+/* ==========================================================================
+   Feature 1: Global Pinned Shelf (BMK-PIN-001)
+   ========================================================================== */
+.pinned-shelf {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 20px;
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+body.has-custom-bg .pinned-shelf {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+[data-resolved-theme="dark"] body.has-custom-bg .pinned-shelf {
+  background: rgba(36, 36, 38, 0.92);
+}
+
+.pinned-shelf.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 14px;
+  min-height: 40px;
+}
+
+.pinned-shelf.is-empty .pinned-shelf-header {
+  padding: 0;
+  border-bottom: none;
+  background: transparent;
+}
+
+.pinned-shelf.has-items {
+  display: flex;
+  flex-direction: column;
+  /* Occupies ~28%–33% of available content height when populated */
+  max-height: clamp(168px, 31vh, 260px);
+}
+
+.pinned-shelf.has-items.is-expanded {
+  max-height: 52vh;
+}
+
+.pinned-shelf-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  flex-shrink: 0;
+}
+
+body.has-custom-bg .pinned-shelf-header {
+  background: transparent;
+}
+
+.pinned-shelf-title-group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.pinned-shelf-icon {
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pinned-shelf-icon .ui-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.pinned-shelf-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  letter-spacing: -0.01em;
+}
+
+.pinned-shelf-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  padding: 1px 7px;
+  line-height: 1.35;
+}
+
+.pinned-empty-state {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* Max 2 rows visible by default; scrollable or expandable via Show All */
+.pinned-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+  padding: 10px 14px 12px;
+  max-height: 136px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.pinned-shelf.is-expanded .pinned-grid {
+  max-height: 44vh;
+}
+
+.pinned-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 52px;
+  padding: 6px 8px 6px 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg-item);
+  border: 1px solid var(--border-subtle);
+  transition: background-color 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+  cursor: pointer;
+}
+
+.pinned-card:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.pinned-card:focus-visible,
+.pinned-card:has(.pinned-card-anchor:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+  background: var(--bg-hover);
+  border-color: var(--primary);
+}
+
+.pinned-card:active:not(:has(button:active)) {
+  background: var(--bg-active);
+}
+
+.pinned-card.is-dragging {
+  opacity: 0.45;
+  border: 1.5px dashed #FF9F0A !important;
+  transform: scale(0.98);
+}
+
+.pinned-card.drop-target-before::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: -2px;
+  width: 4px;
+  background: #FF9F0A;
+  border-radius: 2px;
+  z-index: 10;
+}
+
+.pinned-card.drop-target-after::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  right: -2px;
+  width: 4px;
+  background: #FF9F0A;
+  border-radius: 2px;
+  z-index: 10;
+}
+
+.pinned-card-anchor {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: var(--text-main);
+  align-self: stretch;
+}
+
+.pinned-card-anchor:focus-visible {
+  outline: none;
+}
+
+.pinned-favicon-container {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pinned-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pinned-card-top-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pinned-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pinned-card-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pinned-domain {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.pinned-meta-sep {
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.pinned-group-pill {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.pinned-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.pinned-unpin-btn {
+  opacity: 0;
+  color: var(--primary);
+  transition: opacity 0.12s ease, background-color 0.12s ease, color 0.12s ease;
+}
+
+.pinned-card:hover .pinned-unpin-btn,
+.pinned-card:focus-within .pinned-unpin-btn,
+.pinned-unpin-btn:focus-visible,
+.is-manage-mode .pinned-unpin-btn {
+  opacity: 1;
+}
+
+/* ==========================================================================
+   Feature 2: Expanded Bookmark Click Area (BMK-HIT-001)
+   ========================================================================== */
+.link-row {
+  min-height: 48px;
+  padding: 5px 8px 5px 10px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.is-manage-mode .link-row,
+.is-manage-mode .pinned-card {
+  cursor: default;
+}
+
+.link-item:hover .link-row,
+.link-row:hover {
+  background: var(--bg-hover);
+}
+
+.link-item:has(.link-anchor:focus-visible),
+.link-item:has(.link-row:focus-visible) {
+  border-color: var(--primary);
+}
+
+.link-row:focus-visible,
+.link-row:has(.link-anchor:focus-visible) {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+  background: var(--bg-hover);
+}
+
+.link-row:active:not(:has(button:active)) {
+  background: var(--bg-active);
+}
+
+.link-anchor {
+  align-self: stretch;
+  padding: 4px 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.link-anchor:focus-visible {
+  outline: none;
+}
+
+.link-primary-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.link-url-summary {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+/* Independent action buttons: strictly >= 32x32px hit area */
+.link-pin-btn,
+.link-row .link-expand-btn,
+.link-row .link-manage-actions .btn-icon,
+.pinned-card-actions .btn-icon,
+.pinned-drag-handle {
+  min-width: 32px;
+  min-height: 32px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+
+.link-pin-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, background-color 0.12s ease;
+}
+
+.link-item:hover .link-pin-btn,
+.link-item:focus-within .link-pin-btn,
+.link-pin-btn:focus-visible,
+.link-pin-btn.is-pinned,
+.is-manage-mode .link-pin-btn {
+  opacity: 1;
+}
+
+.link-pin-btn:hover {
+  color: var(--text-main);
+  background-color: var(--bg-hover);
+}
+
+.link-pin-btn.is-pinned {
+  color: var(--primary);
+}
+
+.link-pin-btn.is-pinned:hover {
+  color: var(--primary-hover);
+  background-color: var(--primary-subtle);
+}
+
+.link-pin-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.link-pin-btn .ui-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* ==========================================================================
+   Feature 3: Centralized Spotlight Search (BMK-SEARCH-001)
+   ========================================================================== */
+.search-trigger-btn {
+  gap: 6px;
+  padding: 3px 8px 3px 9px;
+}
+
+.search-shortcut-kbd {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 1.25;
+}
+
+.search-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 10vh 16px 24px;
+}
+
+.search-dialog {
+  width: 100%;
+  max-width: 640px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 76vh;
+  animation: modalEnter 0.14s ease-out;
+}
+
+.search-bar-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  min-height: 52px;
+}
+
+.search-modal-icon {
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 15px;
+  font-family: inherit;
+  line-height: 1.4;
+  outline: none;
+  min-width: 0;
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-close-btn {
+  min-width: 32px;
+  min-height: 32px;
+  width: 32px;
+  height: 32px;
+}
+
+.search-results-body {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  max-height: 54vh;
+  padding: 8px;
+}
+
+.search-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 8px 6px;
+}
+
+.search-results-listbox {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.search-group-divider-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 6px 8px 3px;
+}
+
+.search-result-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  min-height: 48px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.1s ease, border-color 0.1s ease;
+}
+
+.search-result-option:hover {
+  background: var(--bg-hover);
+}
+
+.search-result-option[aria-selected="true"],
+.search-result-option.is-active {
+  background: var(--primary-subtle);
+  border-color: var(--primary-border);
+}
+
+.search-result-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.search-result-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.search-result-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.search-result-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-result-pin-tag {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--primary-subtle);
+  border: 1px solid var(--primary-border);
+  border-radius: var(--radius-xs);
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+.search-result-domain {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-result-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  max-width: 45%;
+}
+
+.search-result-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  padding: 2px 7px;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-result-category,
+.search-result-group {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result-sep {
+  opacity: 0.5;
+}
+
+mark.search-highlight {
+  background: rgba(255, 204, 0, 0.35);
+  color: inherit;
+  font-weight: 600;
+  border-radius: 2px;
+  padding: 0;
+}
+
+[data-resolved-theme="dark"] mark.search-highlight {
+  background: rgba(255, 214, 10, 0.28);
+  color: #ffd60a;
+}
+
+.search-empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-muted);
+}
+
+.search-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+
+.search-empty-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.search-dialog-footer {
+  padding: 8px 14px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.search-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-shortcut-settings-btn {
+  font-size: 11px;
+  height: 22px;
+  padding: 1px 6px;
+}
+
+

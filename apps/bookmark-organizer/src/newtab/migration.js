@@ -267,6 +267,12 @@ export async function migrateFromChromeStorageIfNeeded() {
           name: lnk.name,
           url: lnk.url,
           badge: typeof lnk.badge === "string" ? lnk.badge : "",
+          ...(lnk.pinned === true
+            ? {
+                pinned: true,
+                pinnedOrder: typeof lnk.pinnedOrder === "number" ? lnk.pinnedOrder : null
+              }
+            : {}),
           revision: Number.isInteger(lnk.revision) && lnk.revision > 0 ? lnk.revision : 1,
           createdAt: lnk.createdAt || now,
           updatedAt: lnk.updatedAt || now

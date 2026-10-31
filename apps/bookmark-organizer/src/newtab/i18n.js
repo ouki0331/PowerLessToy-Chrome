@@ -167,7 +167,35 @@ const translations = {
     sortCreatedAt: "Sort by Created Date",
     sortManual: "Manual (Drag & Drop)",
     dragHandleAria: (name) => `Drag to reorder group "${name}". Press Alt+Up or Alt+Down to move.`,
-    groupMoved: (name, from, to) => `Moved group "${name}" from position ${from} to ${to}.`
+    groupMoved: (name, from, to) => `Moved group "${name}" from position ${from} to ${to}.`,
+
+    // Global Pinned Shelf (BMK-PIN-001)
+    pinnedShelfTitle: "Pinned Bookmarks",
+    pinnedEmptyHint: "No pinned bookmarks yet. Hover any link or use Manage Content to pin key links here.",
+    pinLink: "Pin",
+    unpinLink: "Unpin",
+    pinLinkFor: (name) => `Pin "${name}" to Pinned Shelf`,
+    unpinLinkFor: (name) => `Unpin "${name}" from Pinned Shelf`,
+    showAllPinned: (count) => `Show All (${count})`,
+    collapsePinned: "Show Less",
+    pinnedDragHandleAria: (name) => `Drag to reorder pinned link "${name}". Press Alt+Arrow keys to move.`,
+    pinnedMoved: (name, from, to) => `Moved pinned link "${name}" from position ${from} to ${to}.`,
+    preservePinnedOnImport: "Restore pinned status and order from backup",
+
+    // Centralized Spotlight Search (BMK-SEARCH-001)
+    searchBtn: "Search",
+    searchBtnHint: (shortcut) => `Search all bookmarks (${shortcut} or /)`,
+    searchDialogTitle: "Search Bookmarks",
+    searchPlaceholder: "Search all categories by title, domain, path, group, or tag...",
+    searchSectionPinned: "Pinned",
+    searchSectionRecent: "Recently Used",
+    searchSectionResults: (count) => `Results (${count})`,
+    searchNoResultsTitle: "No matching bookmarks found",
+    searchNoResultsDesc: (query) => `No bookmarks matched "${query}" across any category.`,
+    searchEmptyWorkspace: "No bookmarks yet. Add links to your groups to search them here.",
+    searchFooterNavHint: "↑↓ Select · Enter Open · Ctrl/⌘+Enter New Tab · Esc Close",
+    searchShortcutSettingsBtn: "Configure Shortcuts",
+    searchShortcutNotice: "Tip: Use / on this page if your browser reserves Ctrl/⌘+K, or customize in Extension Shortcuts."
   },
   ja: {
     appTitle: "Bookmark Organizer",
@@ -332,7 +360,35 @@ const translations = {
     sortCreatedAt: "作成日時順",
     sortManual: "手動（ドラッグ＆ドロップ）",
     dragHandleAria: (name) => `「${name}」の順序を変更。Alt+上下矢印キーで移動。`,
-    groupMoved: (name, from, to) => `グループ「${name}」を ${from} 番目から ${to} 番目に移動しました。`
+    groupMoved: (name, from, to) => `グループ「${name}」を ${from} 番目から ${to} 番目に移動しました。`,
+
+    // Global Pinned Shelf (BMK-PIN-001)
+    pinnedShelfTitle: "ピン留めブックマーク",
+    pinnedEmptyHint: "ピン留めされたリンクはありません。リンクにホバーするか管理モードから固定できます。",
+    pinLink: "ピン留め",
+    unpinLink: "ピン留め解除",
+    pinLinkFor: (name) => `「${name}」をピン留めエリアに固定`,
+    unpinLinkFor: (name) => `「${name}」のピン留めを解除`,
+    showAllPinned: (count) => `すべて表示 (${count})`,
+    collapsePinned: "折りたたむ",
+    pinnedDragHandleAria: (name) => `ピン留め「${name}」の順序を変更。Alt+矢印キーで移動。`,
+    pinnedMoved: (name) => `ピン留め「${name}」の順序を変更しました。`,
+    preservePinnedOnImport: "バックアップからピン留め状態と順序を復元する",
+
+    // Centralized Spotlight Search (BMK-SEARCH-001)
+    searchBtn: "検索",
+    searchBtnHint: (shortcut) => `全ブックマークを検索 (${shortcut} または /)`,
+    searchDialogTitle: "ブックマーク検索",
+    searchPlaceholder: "全カテゴリからタイトル・ドメイン・URL・グループ・タグで検索...",
+    searchSectionPinned: "ピン留め",
+    searchSectionRecent: "最近使用したリンク",
+    searchSectionResults: (count) => `検索結果 (${count})`,
+    searchNoResultsTitle: "一致するブックマークが見つかりません",
+    searchNoResultsDesc: (query) => `「${query}」に一致するリンクは見つかりませんでした。`,
+    searchEmptyWorkspace: "ブックマークがまだありません。",
+    searchFooterNavHint: "↑↓ 移動 · Enter 開く · Ctrl/⌘+Enter 新規タブ · Esc 閉じる",
+    searchShortcutSettingsBtn: "ショートカット設定",
+    searchShortcutNotice: "ヒント: ブラウザが Ctrl/⌘+K を予約している場合は / キーまたは拡張機能ショートカット設定をご利用ください。"
   }
 };
 

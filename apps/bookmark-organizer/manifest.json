@@ -22,6 +22,15 @@
     "service_worker": "src/background/index.js",
     "scripts": ["src/background/index.js"]
   },
+  "commands": {
+    "open-bookmark-search": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+K",
+        "mac": "Command+Shift+K"
+      },
+      "description": "Open centralized bookmark search"
+    }
+  },
   "permissions": [
     "storage"
   ],

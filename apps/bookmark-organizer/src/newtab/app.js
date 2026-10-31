@@ -22,11 +22,18 @@ import {
   addLink,
   editLink,
   deleteLink,
+  pinLink,
+  unpinLink,
+  togglePinLink,
+  reorderPinnedLinks,
+  getPinnedLinks,
   isValidUrl,
   subscribeStorageChanges,
   reorderGroups,
   recordGroupClick,
-  getGroupMetricsMap
+  getGroupMetricsMap,
+  recordLinkClick,
+  getLinkMetricsMap
 } from "./storage.js";
 
 import {
@@ -54,6 +61,27 @@ import { DEFAULT_BADGES } from "./constants.js";
 import { t, getLanguage, setLanguage } from "./i18n.js";
 import { SVG_ICONS, renderSvgIcon } from "./icons.js";
 import { initBackgroundUI, updateBackgroundUI } from "./background-ui.js";
+import {
+  searchBookmarks,
+  appendHighlightedText,
+  evaluateSearchShortcut,
+  getPlatformSearchShortcutLabel
+} from "./search.js";
+
+const FEATURE_ICONS = {
+  pin: `<svg class="ui-icon ui-icon-compact" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <line x1="12" y1="17" x2="12" y2="22"></line>
+    <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
+  </svg>`,
+  pinFilled: `<svg class="ui-icon ui-icon-compact" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <line x1="12" y1="17" x2="12" y2="22"></line>
+    <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
+  </svg>`,
+  search: `<svg class="ui-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="11" cy="11" r="8"></circle>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>`
+};
 
 // Application State
 let state = {
@@ -61,7 +89,13 @@ let state = {
   isManageMode: false,
   activeModal: null,
   lastImportJobId: null,
-  expandedLinks: new Map() // groupId -> linkId (VIEW-LINK-001)
+  expandedLinks: new Map(), // groupId -> linkId (VIEW-LINK-001)
+  isPinnedExpanded: false,
+  isSearchOpen: false,
+  searchQuery: "",
+  searchSelectedIndex: 0,
+  searchResults: [],
+  searchTriggerElement: null
 };
 
 // DOM References
@@ -132,13 +166,45 @@ const elements = {
   get sortMostUsedBtn() { return el("sortMostUsedBtn"); },
   get sortRecentlyUsedBtn() { return el("sortRecentlyUsedBtn"); },
   get sortCreatedBtn() { return el("sortCreatedBtn"); },
-  get a11yAnnouncer() { return el("a11yAnnouncer"); }
+  get a11yAnnouncer() { return el("a11yAnnouncer"); },
+  get mainContent() { return el("mainContent"); },
+
+  // Pinned Shelf Elements (BMK-PIN-001)
+  get pinnedShelf() { return el("pinnedShelf"); },
+  get pinnedShelfTitle() { return el("pinnedShelfTitle"); },
+  get pinnedShelfCount() { return el("pinnedShelfCount"); },
+  get pinnedShelfIcon() { return el("pinnedShelfIcon"); },
+  get togglePinnedExpandBtn() { return el("togglePinnedExpandBtn"); },
+  get togglePinnedExpandText() { return el("togglePinnedExpandText"); },
+  get pinnedEmptyState() { return el("pinnedEmptyState"); },
+  get pinnedEmptyText() { return el("pinnedEmptyText"); },
+  get pinnedGrid() { return el("pinnedGrid"); },
+
+  // Centralized Search Elements (BMK-SEARCH-001)
+  get openSearchBtn() { return el("openSearchBtn"); },
+  get searchBtnIcon() { return el("searchBtnIcon"); },
+  get searchBtnText() { return el("searchBtnText"); },
+  get searchShortcutBadge() { return el("searchShortcutBadge"); },
+  get searchOverlay() { return el("searchOverlay"); },
+  get searchDialog() { return el("searchDialog"); },
+  get searchDialogTitle() { return el("searchDialogTitle"); },
+  get searchModalIcon() { return el("searchModalIcon"); },
+  get searchInput() { return el("searchInput"); },
+  get closeSearchBtn() { return el("closeSearchBtn"); },
+  get closeSearchIcon() { return el("closeSearchIcon"); },
+  get searchSectionLabel() { return el("searchSectionLabel"); },
+  get searchResultsListbox() { return el("searchResultsListbox"); },
+  get searchEmptyState() { return el("searchEmptyState"); },
+  get searchEmptyTitle() { return el("searchEmptyTitle"); },
+  get searchEmptyDesc() { return el("searchEmptyDesc"); },
+  get searchFooterNavHint() { return el("searchFooterNavHint"); },
+  get searchShortcutNotice() { return el("searchShortcutNotice"); },
+  get searchShortcutSettingsBtn() { return el("searchShortcutSettingsBtn"); }
 };
 
 // Initialize Application
-if (typeof document !== "undefined" && document.addEventListener) {
-  document.addEventListener("DOMContentLoaded", async () => {
-  const savedLang = localStorage.getItem("powerless_toy_lang");
+async function bootstrapApp() {
+  const savedLang = typeof localStorage !== "undefined" ? localStorage.getItem("powerless_toy_lang") : null;
   if (savedLang) {
     setLanguage(savedLang);
   }
@@ -152,7 +218,16 @@ if (typeof document !== "undefined" && document.addEventListener) {
   initStaticIcons();
   await initWorkbench();
   await initBackgroundUI(elements, openModal, closeModal);
-  });
+}
+
+if (typeof document !== "undefined" && document.addEventListener) {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootstrapApp);
+  } else if (typeof window !== "undefined" && window.location?.protocol?.startsWith("http")) {
+    bootstrapApp();
+  } else {
+    document.addEventListener("DOMContentLoaded", bootstrapApp);
+  }
 }
 
 function setElementButtonText(btn, text) {
@@ -222,10 +297,16 @@ function initStaticIcons() {
   renderSvgIcon(elements.sortMostUsedBtn?.querySelector(".icon-slot"), SVG_ICONS.sortMostUsed);
   renderSvgIcon(elements.sortRecentlyUsedBtn?.querySelector(".icon-slot"), SVG_ICONS.sortRecentlyUsed);
   renderSvgIcon(elements.sortCreatedBtn?.querySelector(".icon-slot"), SVG_ICONS.sortCreatedAt);
+
+  if (elements.pinnedShelfIcon) renderSvgIcon(elements.pinnedShelfIcon, FEATURE_ICONS.pinFilled);
+  if (elements.searchBtnIcon) renderSvgIcon(elements.searchBtnIcon, FEATURE_ICONS.search);
+  if (elements.searchModalIcon) renderSvgIcon(elements.searchModalIcon, FEATURE_ICONS.search);
+  if (elements.closeSearchIcon) renderSvgIcon(elements.closeSearchIcon, SVG_ICONS.close);
 }
 
 function updateI18nLabels() {
   const lang = getLanguage();
+  const shortcutLabel = getPlatformSearchShortcutLabel();
   if (elements.currentLangLabel) elements.currentLangLabel.textContent = lang.toUpperCase();
   if (elements.brandTitle) elements.brandTitle.textContent = t("appTitle");
   if (elements.tagline) elements.tagline.textContent = t("tagline");
@@ -244,6 +325,19 @@ function updateI18nLabels() {
   if (elements.exportBtnText) elements.exportBtnText.textContent = t("exportBtn");
   setElementButtonText(elements.undoImportBtn, t("undoImportBtn"));
   if (elements.bgHeaderBtnText) elements.bgHeaderBtnText.textContent = t("bgButton");
+  if (elements.pinnedShelfTitle) elements.pinnedShelfTitle.textContent = t("pinnedShelfTitle");
+  if (elements.pinnedEmptyText) elements.pinnedEmptyText.textContent = t("pinnedEmptyHint");
+  if (elements.searchBtnText) elements.searchBtnText.textContent = t("searchBtn");
+  if (elements.searchShortcutBadge) elements.searchShortcutBadge.textContent = shortcutLabel;
+  if (elements.openSearchBtn) {
+    elements.openSearchBtn.title = t("searchBtnHint", shortcutLabel);
+    elements.openSearchBtn.setAttribute("aria-label", t("searchBtnHint", shortcutLabel));
+  }
+  if (elements.searchDialogTitle) elements.searchDialogTitle.textContent = t("searchDialogTitle");
+  if (elements.searchInput) elements.searchInput.placeholder = t("searchPlaceholder");
+  if (elements.searchFooterNavHint) elements.searchFooterNavHint.textContent = t("searchFooterNavHint");
+  if (elements.searchShortcutNotice) elements.searchShortcutNotice.textContent = t("searchShortcutNotice");
+  if (elements.searchShortcutSettingsBtn) elements.searchShortcutSettingsBtn.textContent = t("searchShortcutSettingsBtn");
   if (elements.sortMostUsedBtn) {
     elements.sortMostUsedBtn.title = t("sortMostUsed");
     elements.sortMostUsedBtn.setAttribute("aria-label", t("sortMostUsed"));
@@ -264,7 +358,7 @@ async function initWorkbench() {
   try {
     elements.errorBanner.style.display = "none";
     state.data = await loadWorkbenchData();
-    renderAll();
+    await renderAll();
   } catch (err) {
     console.error("Failed to load workbench data:", err);
     if (elements.errorDesc) {
@@ -295,7 +389,10 @@ function setupStorageSubscription() {
           freshData.activeCategoryId = localActive;
         }
         state.data = freshData;
-        renderAll(false);
+        await renderAll(false);
+        if (state.isSearchOpen) {
+          await refreshSearchResults();
+        }
       } catch (err) {
         console.warn("Storage sync error from background/other tab:", err);
       }
@@ -402,6 +499,62 @@ function setupEventListeners() {
   elements.sortMostUsedBtn?.addEventListener("click", () => handleSortToggle("most_used"));
   elements.sortRecentlyUsedBtn?.addEventListener("click", () => handleSortToggle("recently_used"));
   elements.sortCreatedBtn?.addEventListener("click", () => handleSortToggle("created_at"));
+
+  // Pinned Shelf Expand/Collapse Toggle (BMK-PIN-001)
+  elements.togglePinnedExpandBtn?.addEventListener("click", () => {
+    state.isPinnedExpanded = !state.isPinnedExpanded;
+    renderPinnedShelf();
+  });
+
+  // Centralized Spotlight Search Events (BMK-SEARCH-001)
+  elements.openSearchBtn?.addEventListener("click", () => {
+    openSearchModal("");
+  });
+
+  elements.closeSearchBtn?.addEventListener("click", () => {
+    closeSearchModal();
+  });
+
+  elements.searchOverlay?.addEventListener("click", (e) => {
+    if (e.target === elements.searchOverlay) {
+      closeSearchModal();
+    }
+  });
+
+  elements.searchInput?.addEventListener("input", (e) => {
+    state.searchQuery = e.target.value || "";
+    state.searchSelectedIndex = 0;
+    refreshSearchResults();
+  });
+
+  elements.searchDialog?.addEventListener("keydown", (e) => {
+    handleSearchDialogKeydown(e);
+  });
+
+  elements.searchShortcutSettingsBtn?.addEventListener("click", () => {
+    openExtensionShortcutSettings();
+  });
+
+  // Global keyboard shortcuts for Centralized Search (Ctrl/Cmd+K and '/')
+  if (typeof document !== "undefined" && document.addEventListener) {
+    document.addEventListener("keydown", handleGlobalSearchKeydown);
+  }
+
+  // Extension command listener (when user triggers shortcut via browser extension command)
+  if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg && msg.type === "OPEN_BOOKMARK_SEARCH") {
+        openSearchModal("");
+      }
+    });
+  }
+  if (typeof chrome !== "undefined" && chrome.commands?.onCommand) {
+    chrome.commands.onCommand.addListener((command) => {
+      if (command === "open-bookmark-search") {
+        openSearchModal("");
+      }
+    });
+  }
 }
 
 let currentDraggedGroupId = null;
@@ -797,16 +950,32 @@ function openImportPreviewModal(fileName, fileContent, preview, noticeMessage = 
     container.appendChild(conflictSection);
   }
 
+  // Option to preserve pinned state from backup (defaults to false for normal append import, BMK-PIN-001)
+  const pinOptRow = document.createElement("label");
+  pinOptRow.className = "bg-popover-label-row";
+  pinOptRow.style.padding = "4px 0";
+  const preservePinnedCheckbox = document.createElement("input");
+  preservePinnedCheckbox.type = "checkbox";
+  preservePinnedCheckbox.id = "importPreservePinnedCheckbox";
+  preservePinnedCheckbox.checked = false;
+  const pinOptText = document.createElement("span");
+  pinOptText.textContent = t("preservePinnedOnImport");
+  pinOptRow.appendChild(preservePinnedCheckbox);
+  pinOptRow.appendChild(pinOptText);
+  container.appendChild(pinOptRow);
+
   openModal(
     t("importPreviewTitle"),
     container,
     async () => {
       try {
+        const preservePinned = Boolean(preservePinnedCheckbox.checked);
         const result = await executeImport({
           importData: fileContent,
           fileName,
           conflictResolutions,
-          expectedPlanSignature: preview.planSignature
+          expectedPlanSignature: preservePinned ? undefined : preview.planSignature,
+          preservePinned
         });
 
         state.lastImportJobId = result.importJob.id;
@@ -962,13 +1131,360 @@ async function switchCategory(catId, preserveFocus = false) {
 
 async function renderAll(maintainActiveFocus = false) {
   if (!state.data) return;
+  elements.mainContent?.classList.toggle("is-manage-mode", Boolean(state.isManageMode));
   renderCategoryTabs(maintainActiveFocus);
   await renderCategoryContent();
 }
 
 async function renderCategoryContent() {
+  elements.mainContent?.classList.toggle("is-manage-mode", Boolean(state.isManageMode));
+  renderPinnedShelf();
   renderActiveCategoryHeader();
   await renderGroups();
+}
+
+let currentDraggedPinnedId = null;
+
+/**
+ * Render the Global Pinned Shelf at the top of mainContent (BMK-PIN-001).
+ * Visible across all categories; updates synchronously on pin, unpin, edit, delete, or reorder.
+ */
+function renderPinnedShelf() {
+  if (!elements.pinnedShelf || !state.data) return;
+
+  const pinnedLinks = getPinnedLinks(state.data);
+  const count = pinnedLinks.length;
+
+  if (elements.pinnedShelfTitle) {
+    elements.pinnedShelfTitle.textContent = t("pinnedShelfTitle");
+  }
+  if (elements.pinnedShelfCount) {
+    elements.pinnedShelfCount.textContent = String(count);
+  }
+  if (elements.pinnedEmptyText) {
+    elements.pinnedEmptyText.textContent = t("pinnedEmptyHint");
+  }
+
+  if (count === 0) {
+    state.isPinnedExpanded = false;
+    elements.pinnedShelf.classList.add("is-empty");
+    elements.pinnedShelf.classList.remove("has-items", "is-expanded");
+    if (elements.pinnedEmptyState) elements.pinnedEmptyState.style.display = "block";
+    if (elements.pinnedGrid) {
+      elements.pinnedGrid.style.display = "none";
+      elements.pinnedGrid.innerHTML = "";
+    }
+    if (elements.togglePinnedExpandBtn) {
+      elements.togglePinnedExpandBtn.style.display = "none";
+    }
+    return;
+  }
+
+  elements.pinnedShelf.classList.remove("is-empty");
+  elements.pinnedShelf.classList.add("has-items");
+  elements.pinnedShelf.classList.toggle("is-expanded", Boolean(state.isPinnedExpanded));
+
+  if (elements.pinnedEmptyState) {
+    elements.pinnedEmptyState.style.display = "none";
+  }
+
+  const grpMap = new Map((state.data.groups || []).map((g) => [g.id, g]));
+  const catMap = new Map((state.data.categories || []).map((c) => [c.id, c]));
+
+  if (elements.pinnedGrid) {
+    elements.pinnedGrid.style.display = "grid";
+    elements.pinnedGrid.innerHTML = "";
+
+    pinnedLinks.forEach((link) => {
+      const group = grpMap.get(link.groupId);
+      if (!group) return;
+      const category = catMap.get(group.categoryId);
+      const card = createPinnedCard(link, group, category);
+      elements.pinnedGrid.appendChild(card);
+    });
+  }
+
+  if (elements.togglePinnedExpandBtn) {
+    const showToggle = count > 6;
+    elements.togglePinnedExpandBtn.style.display = showToggle ? "inline-flex" : "none";
+    elements.togglePinnedExpandBtn.setAttribute(
+      "aria-expanded",
+      state.isPinnedExpanded ? "true" : "false"
+    );
+    if (elements.togglePinnedExpandText) {
+      elements.togglePinnedExpandText.textContent = state.isPinnedExpanded
+        ? t("collapsePinned")
+        : t("showAllPinned", count);
+    } else {
+      elements.togglePinnedExpandBtn.textContent = state.isPinnedExpanded
+        ? t("collapsePinned")
+        : t("showAllPinned", count);
+    }
+  }
+}
+
+function createPinnedCard(link, group, category) {
+  if (!group && state.data?.groups) {
+    group = state.data.groups.find((g) => g.id === link.groupId) || { name: "" };
+  }
+  if (!category && group && state.data?.categories) {
+    category = state.data.categories.find((c) => c.id === group.categoryId) || null;
+  }
+  const card = document.createElement("div");
+  card.className = "pinned-card";
+  card.setAttribute("role", "listitem");
+  card.dataset.pinnedLinkId = link.id;
+  card.dataset.linkId = link.id;
+
+  let hostname = "";
+  try {
+    hostname = new URL(link.url).hostname;
+  } catch {
+    hostname = link.url;
+  }
+
+  if (state.isManageMode) {
+    const dragHandle = document.createElement("button");
+    dragHandle.type = "button";
+    dragHandle.className = "drag-handle-btn pinned-drag-handle";
+    dragHandle.setAttribute("draggable", "true");
+    dragHandle.setAttribute("aria-label", t("pinnedDragHandleAria", link.name));
+    dragHandle.title = t("pinnedDragHandleAria", link.name);
+    dragHandle.dataset.pinnedLinkId = link.id;
+    renderSvgIcon(dragHandle, SVG_ICONS.dragHandle);
+    setupPinnedDragEvents(dragHandle, card, link);
+    card.appendChild(dragHandle);
+    setupPinnedCardDropEvents(card, link);
+  }
+
+  const anchor = document.createElement("a");
+  anchor.className = "pinned-card-anchor";
+  anchor.href = link.url;
+  anchor.title = `${link.name} (${link.url})\n${group.name}${category ? ` · ${category.name}` : ""}\n${t("openNewTabHint")}`;
+
+  const faviconContainer = document.createElement("div");
+  faviconContainer.className = "link-favicon-container pinned-favicon-container";
+  const placeholder = document.createElement("div");
+  placeholder.className = "link-favicon-placeholder";
+  placeholder.textContent = getDomainInitial(hostname);
+  faviconContainer.appendChild(placeholder);
+  anchor.appendChild(faviconContainer);
+
+  const info = document.createElement("div");
+  info.className = "pinned-card-info";
+
+  const topRow = document.createElement("div");
+  topRow.className = "pinned-card-top-row";
+
+  if (link.badge) {
+    const badgeSpan = document.createElement("span");
+    const lowerBadge = link.badge.toLowerCase();
+    const isStandardBadge = ["local", "dev", "test", "prod"].includes(lowerBadge);
+    badgeSpan.className = `link-badge ${isStandardBadge ? `badge-${lowerBadge}` : "badge-custom"}`;
+    badgeSpan.textContent = link.badge;
+    topRow.appendChild(badgeSpan);
+  }
+
+  const titleSpan = document.createElement("span");
+  titleSpan.className = "pinned-title";
+  titleSpan.textContent = link.name;
+  topRow.appendChild(titleSpan);
+  info.appendChild(topRow);
+
+  const metaRow = document.createElement("div");
+  metaRow.className = "pinned-card-meta-row";
+
+  const domainSpan = document.createElement("span");
+  domainSpan.className = "pinned-domain";
+  domainSpan.textContent = hostname;
+  metaRow.appendChild(domainSpan);
+
+  const sep = document.createElement("span");
+  sep.className = "pinned-meta-sep";
+  sep.textContent = "·";
+  metaRow.appendChild(sep);
+
+  const groupPill = document.createElement("span");
+  groupPill.className = "pinned-group-pill";
+  groupPill.textContent = group.name;
+  metaRow.appendChild(groupPill);
+
+  info.appendChild(metaRow);
+  anchor.appendChild(info);
+
+  anchor.addEventListener("click", (e) => {
+    navigateToBookmark(link, group.id, e);
+  });
+
+  anchor.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      navigateToBookmark(link, group.id, e);
+    }
+  });
+
+  card.appendChild(anchor);
+
+  // Load local-origin favicon on demand
+  loadFaviconOnDemand(card, link.url);
+
+  // Actions container (Unpin button)
+  const actions = document.createElement("div");
+  actions.className = "pinned-card-actions";
+
+  const unpinBtn = document.createElement("button");
+  unpinBtn.type = "button";
+  unpinBtn.className = "btn-icon pinned-unpin-btn";
+  unpinBtn.setAttribute("aria-label", t("unpinLinkFor", link.name));
+  unpinBtn.title = t("unpinLink");
+  renderSvgIcon(unpinBtn, FEATURE_ICONS.pinFilled);
+  unpinBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await unpinLink(state.data, link.id, link.revision);
+      await renderAll(false);
+    } catch (err) {
+      console.error("Failed to unpin link:", err);
+    }
+  });
+
+  actions.appendChild(unpinBtn);
+  card.appendChild(actions);
+
+  // Full card click delegation (excluding action buttons and drag handle)
+  card.addEventListener("click", (e) => {
+    if (e.defaultPrevented) return;
+    if (
+      e.target === unpinBtn ||
+      unpinBtn.contains?.(e.target) ||
+      e.target?.classList?.contains("pinned-drag-handle") ||
+      e.target?.closest?.(".pinned-card-actions, .pinned-drag-handle, button")
+    ) {
+      return;
+    }
+    if (e.target === anchor || anchor.contains?.(e.target)) {
+      return;
+    }
+    navigateToBookmark(link, group.id, e);
+  });
+
+  return card;
+}
+
+function setupPinnedDragEvents(dragHandle, card, link) {
+  dragHandle.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  dragHandle.addEventListener("dragstart", (e) => {
+    currentDraggedPinnedId = link.id;
+    card.classList.add("is-dragging");
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", link.id);
+    }
+  });
+
+  dragHandle.addEventListener("dragend", () => {
+    card.classList.remove("is-dragging");
+    document.querySelectorAll?.(".pinned-card")?.forEach((c) => {
+      c.classList.remove("is-dragging", "drop-target-before", "drop-target-after");
+    });
+    currentDraggedPinnedId = null;
+  });
+
+  // Keyboard Reordering for Pinned Items (Alt+Arrow or Arrow keys on handle)
+  dragHandle.addEventListener("keydown", async (e) => {
+    if (
+      e.key !== "ArrowUp" &&
+      e.key !== "ArrowDown" &&
+      e.key !== "ArrowLeft" &&
+      e.key !== "ArrowRight"
+    ) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const pinnedLinks = getPinnedLinks(state.data);
+    const currentIndex = pinnedLinks.findIndex((l) => l.id === link.id);
+    if (currentIndex === -1) return;
+
+    const moveBackward = e.key === "ArrowUp" || e.key === "ArrowLeft";
+    const targetIndex = moveBackward ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= pinnedLinks.length) return;
+
+    const [moved] = pinnedLinks.splice(currentIndex, 1);
+    pinnedLinks.splice(targetIndex, 0, moved);
+    const orderedIds = pinnedLinks.map((l) => l.id);
+
+    try {
+      await reorderPinnedLinks(state.data, orderedIds);
+      announceA11y(t("pinnedMoved", moved.name, currentIndex + 1, targetIndex + 1));
+      renderPinnedShelf();
+      const newHandle = elements.pinnedGrid?.querySelector(
+        `[data-pinned-link-id="${link.id}"] .pinned-drag-handle`
+      );
+      newHandle?.focus();
+    } catch (err) {
+      console.error("Failed to reorder pinned links via keyboard:", err);
+    }
+  });
+}
+
+function setupPinnedCardDropEvents(card, link) {
+  card.addEventListener("dragover", (e) => {
+    if (!currentDraggedPinnedId || currentDraggedPinnedId === link.id) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+
+    const rect = card.getBoundingClientRect ? card.getBoundingClientRect() : { left: 0, width: 100 };
+    const midX = rect.left + rect.width / 2;
+    if ((e.clientX || 0) < midX) {
+      card.classList.add("drop-target-before");
+      card.classList.remove("drop-target-after");
+    } else {
+      card.classList.add("drop-target-after");
+      card.classList.remove("drop-target-before");
+    }
+  });
+
+  card.addEventListener("dragleave", (e) => {
+    if (!card.contains?.(e.relatedTarget)) {
+      card.classList.remove("drop-target-before", "drop-target-after");
+    }
+  });
+
+  card.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    const sourceId =
+      currentDraggedPinnedId || (e.dataTransfer ? e.dataTransfer.getData("text/plain") : null);
+    card.classList.remove("drop-target-before", "drop-target-after");
+    if (!sourceId || sourceId === link.id) return;
+
+    const pinnedLinks = getPinnedLinks(state.data);
+    const sourceIndex = pinnedLinks.findIndex((l) => l.id === sourceId);
+    const targetIndex = pinnedLinks.findIndex((l) => l.id === link.id);
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    const [moved] = pinnedLinks.splice(sourceIndex, 1);
+    const rect = card.getBoundingClientRect ? card.getBoundingClientRect() : { left: 0, width: 100 };
+    const insertBefore = (e.clientX ?? 0) < rect.left + rect.width / 2;
+    const newTargetIndex = pinnedLinks.findIndex((l) => l.id === link.id);
+    const insertIndex = insertBefore ? newTargetIndex : newTargetIndex + 1;
+    pinnedLinks.splice(insertIndex, 0, moved);
+
+    const orderedIds = pinnedLinks.map((l) => l.id);
+    try {
+      await reorderPinnedLinks(state.data, orderedIds);
+      announceA11y(t("pinnedMoved", moved.name, sourceIndex + 1, insertIndex + 1));
+      renderPinnedShelf();
+    } catch (err) {
+      console.error("Failed to reorder pinned links on drop:", err);
+    }
+  });
 }
 
 function renderCategoryTabs(maintainActiveFocus = false) {
@@ -1502,12 +2018,52 @@ function updateGroupLinksExpandState(groupId) {
   });
 }
 
+/**
+ * Unified bookmark navigation handler (OPEN-LINK-001 & BMK-HIT-001).
+ * Never navigates in Manage Mode. Supports Ctrl/Cmd+Click/Enter for new tab.
+ */
+function navigateToBookmark(link, groupId, e) {
+  if (state.isManageMode) {
+    if (e && typeof e.preventDefault === "function") e.preventDefault();
+    return false;
+  }
+
+  const openInNewTab = Boolean(e && (e.ctrlKey || e.metaKey));
+  if (e && typeof e.preventDefault === "function") {
+    e.preventDefault();
+  }
+
+  if (groupId) {
+    recordGroupClick(groupId).catch((err) => {
+      console.warn("Failed to record group click:", err);
+    });
+  }
+  if (link?.id) {
+    recordLinkClick(link.id).catch(() => {});
+  }
+
+  if (openInNewTab) {
+    if (typeof chrome !== "undefined" && chrome.tabs?.create) {
+      chrome.tabs.create({ url: link.url, active: false });
+    } else if (typeof window !== "undefined" && typeof window.open === "function") {
+      window.open(link.url, "_blank");
+    }
+    return true;
+  }
+
+  if (typeof window !== "undefined" && window.location) {
+    window.location.href = link.url;
+  }
+  return true;
+}
+
 function createLinkItem(link, group) {
   const item = document.createElement("li");
   item.className = "link-item";
   item.dataset.linkId = link.id;
 
   const isExpanded = state.expandedLinks.get(group.id) === link.id;
+  const isPinned = link.pinned === true;
 
   let hostname = "";
   try {
@@ -1516,11 +2072,11 @@ function createLinkItem(link, group) {
     hostname = link.url;
   }
 
-  // Row Container
+  // Row Container (BMK-HIT-001: full row clickable, min-height 48px)
   const row = document.createElement("div");
   row.className = "link-row";
 
-  // Anchor
+  // Anchor spanning primary click area (Title + URL Summary + inline whitespace)
   const anchor = document.createElement("a");
   anchor.className = "link-anchor";
   anchor.href = link.url;
@@ -1536,43 +2092,64 @@ function createLinkItem(link, group) {
     anchor.appendChild(badgeSpan);
   }
 
+  const textWrap = document.createElement("div");
+  textWrap.className = "link-primary-text";
+
   const nameSpan = document.createElement("span");
   nameSpan.className = "link-name";
   nameSpan.textContent = link.name;
-  anchor.appendChild(nameSpan);
+  textWrap.appendChild(nameSpan);
 
-  // Link open behavior strictly implementing OPEN-LINK-001 & DEC-007
+  const summarySpan = document.createElement("span");
+  summarySpan.className = "link-url-summary";
+  summarySpan.textContent = hostname;
+  textWrap.appendChild(summarySpan);
+
+  anchor.appendChild(textWrap);
+
+  // Link open behavior strictly implementing OPEN-LINK-001, DEC-007 & BMK-HIT-001
   anchor.addEventListener("click", (e) => {
-    if (state.isManageMode) {
-      e.preventDefault();
-      return;
-    }
+    navigateToBookmark(link, group.id, e);
+  });
 
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      recordGroupClick(group.id).catch((err) => {
-        console.warn("Failed to record group click:", err);
-      });
-      if (typeof chrome !== "undefined" && chrome.tabs?.create) {
-        chrome.tabs.create({ url: link.url, active: false });
-      } else {
-        window.open(link.url, "_blank");
-      }
-      return;
+  anchor.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      navigateToBookmark(link, group.id, e);
     }
-
-    e.preventDefault();
-    recordGroupClick(group.id).catch((err) => {
-      console.warn("Failed to record group click:", err);
-    });
-    window.location.href = link.url;
   });
 
   row.appendChild(anchor);
 
-  // Actions Container (Expand Button & Manage Actions)
+  // Actions Container (Pin/Unpin, Expand Button & Manage Actions)
   const actionsContainer = document.createElement("div");
   actionsContainer.className = "link-actions-container";
+
+  // Pin / Unpin button (BMK-PIN-001)
+  const pinBtn = document.createElement("button");
+  pinBtn.type = "button";
+  pinBtn.className = `link-pin-btn ${isPinned ? "is-pinned" : ""}`;
+  pinBtn.id = `link-pin-btn-${link.id}`;
+  pinBtn.setAttribute("aria-pressed", isPinned ? "true" : "false");
+  pinBtn.setAttribute(
+    "aria-label",
+    isPinned ? t("unpinLinkFor", link.name) : t("pinLinkFor", link.name)
+  );
+  pinBtn.title = isPinned ? t("unpinLink") : t("pinLink");
+  renderSvgIcon(pinBtn, isPinned ? FEATURE_ICONS.pinFilled : FEATURE_ICONS.pin);
+
+  pinBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      await togglePinLink(state.data, link.id, link.revision);
+      await renderAll(false);
+    } catch (err) {
+      console.error("Failed to toggle pin state:", err);
+    }
+  });
+
+  actionsContainer.appendChild(pinBtn);
 
   // Expand / Collapse button
   const expandBtn = document.createElement("button");
@@ -1610,18 +2187,28 @@ function createLinkItem(link, group) {
     actions.className = "link-manage-actions";
 
     const editBtn = document.createElement("button");
-    editBtn.className = "btn-icon";
+    editBtn.type = "button";
+    editBtn.className = "btn-icon link-edit-btn";
     renderSvgIcon(editBtn, SVG_ICONS.edit);
     editBtn.title = t("edit");
     editBtn.setAttribute("aria-label", `${t("edit")} ${link.name}`);
-    editBtn.addEventListener("click", () => openEditLinkModal(link));
+    editBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openEditLinkModal(link);
+    });
 
     const deleteBtn = document.createElement("button");
-    deleteBtn.className = "btn-icon danger";
+    deleteBtn.type = "button";
+    deleteBtn.className = "btn-icon danger link-delete-btn";
     renderSvgIcon(deleteBtn, SVG_ICONS.trash);
     deleteBtn.title = t("delete");
     deleteBtn.setAttribute("aria-label", `${t("delete")} ${link.name}`);
-    deleteBtn.addEventListener("click", () => openDeleteLinkModal(link));
+    deleteBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openDeleteLinkModal(link);
+    });
 
     actions.appendChild(editBtn);
     actions.appendChild(deleteBtn);
@@ -1629,6 +2216,36 @@ function createLinkItem(link, group) {
   }
 
   row.appendChild(actionsContainer);
+
+  // Full row click delegation (covers inline whitespace and padding outside action buttons)
+  row.addEventListener("click", (e) => {
+    if (e.defaultPrevented) return;
+    if (
+      e.target === actionsContainer ||
+      actionsContainer.contains?.(e.target) ||
+      e.target?.closest?.(".link-actions-container, button")
+    ) {
+      return;
+    }
+    if (e.target === anchor || anchor.contains?.(e.target)) {
+      return;
+    }
+    navigateToBookmark(link, group.id, e);
+  });
+
+  row.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    if (
+      e.target === actionsContainer ||
+      actionsContainer.contains?.(e.target) ||
+      e.target?.closest?.(".link-actions-container, button")
+    ) {
+      return;
+    }
+    if (e.target === anchor) return;
+    navigateToBookmark(link, group.id, e);
+  });
+
   item.appendChild(row);
 
   // Expandable Details Panel
@@ -2334,6 +2951,427 @@ function openDeleteLinkModal(link) {
   );
 }
 
+// ==========================================================================
+// Feature 3: Centralized Spotlight Search (BMK-SEARCH-001)
+// ==========================================================================
+
+let searchRequestSeq = 0;
+
+async function openSearchModal(initialQuery = "", triggerElement = null) {
+  if (!state.isSearchOpen) {
+    state.searchTriggerElement =
+      triggerElement ||
+      (typeof document !== "undefined" ? document.activeElement : null);
+  }
+
+  state.isSearchOpen = true;
+  state.searchQuery = initialQuery;
+  state.searchSelectedIndex = 0;
+
+  if (elements.openSearchBtn) {
+    elements.openSearchBtn.setAttribute("aria-expanded", "true");
+  }
+
+  if (elements.searchOverlay) {
+    elements.searchOverlay.style.display = "flex";
+  }
+
+  if (elements.searchInput) {
+    elements.searchInput.value = initialQuery;
+    if (typeof elements.searchInput.focus === "function") {
+      elements.searchInput.focus();
+    }
+  }
+
+  await refreshSearchResults();
+
+  if (state.isSearchOpen && elements.searchInput && typeof elements.searchInput.focus === "function") {
+    elements.searchInput.focus();
+  }
+}
+
+function closeSearchModal() {
+  searchRequestSeq++;
+  const wasOpen = state.isSearchOpen;
+  state.isSearchOpen = false;
+
+  if (elements.searchInput && typeof elements.searchInput.blur === "function") {
+    elements.searchInput.blur();
+  }
+
+  if (elements.searchOverlay) {
+    elements.searchOverlay.style.display = "none";
+  }
+
+  if (elements.openSearchBtn) {
+    elements.openSearchBtn.setAttribute("aria-expanded", "false");
+  }
+
+  const prev = state.searchTriggerElement;
+  state.searchTriggerElement = null;
+  if (wasOpen && prev && typeof prev.focus === "function") {
+    prev.focus();
+  }
+}
+
+async function refreshSearchResults() {
+  if (!state.data) return [];
+  const reqId = ++searchRequestSeq;
+
+  const [linkMetricsMap, groupMetricsMap] = await Promise.all([
+    getLinkMetricsMap().catch(() => new Map()),
+    getGroupMetricsMap().catch(() => new Map())
+  ]);
+
+  if (reqId !== searchRequestSeq) {
+    return state.searchResults;
+  }
+
+  const searchOut = searchBookmarks(state.data, state.searchQuery, {
+    linkMetricsMap,
+    groupMetricsMap
+  });
+
+  state.searchResults = searchOut.results;
+  if (state.searchSelectedIndex >= state.searchResults.length) {
+    state.searchSelectedIndex = Math.max(0, state.searchResults.length - 1);
+  }
+  if (state.searchSelectedIndex < 0) {
+    state.searchSelectedIndex = 0;
+  }
+
+  renderSearchResultsDOM(searchOut);
+  return state.searchResults;
+}
+
+function renderSearchResultsDOM(searchOut) {
+  const listbox = elements.searchResultsListbox;
+  if (!listbox) return;
+
+  listbox.innerHTML = "";
+
+  const results = searchOut.results || [];
+  const tokens = searchOut.tokens || [];
+
+  if (elements.searchSectionLabel) {
+    if (searchOut.isEmptyQuery) {
+      const hasPinned = (searchOut.pinnedResults?.length || 0) > 0;
+      const hasRecent = (searchOut.recentResults?.length || 0) > 0;
+      if (hasPinned && hasRecent) {
+        elements.searchSectionLabel.textContent = `${t("searchSectionPinned")} & ${t("searchSectionRecent")}`;
+      } else if (hasPinned) {
+        elements.searchSectionLabel.textContent = t("searchSectionPinned");
+      } else if (hasRecent) {
+        elements.searchSectionLabel.textContent = t("searchSectionRecent");
+      } else {
+        elements.searchSectionLabel.textContent = "";
+      }
+    } else {
+      elements.searchSectionLabel.textContent = t("searchSectionResults", results.length);
+    }
+  }
+
+  if (results.length === 0) {
+    listbox.style.display = "none";
+    if (elements.searchEmptyState) {
+      elements.searchEmptyState.style.display = "block";
+    }
+    if (elements.searchEmptyTitle) {
+      elements.searchEmptyTitle.textContent = searchOut.isEmptyQuery
+        ? t("searchEmptyWorkspace")
+        : t("searchNoResultsTitle");
+    }
+    if (elements.searchEmptyDesc) {
+      elements.searchEmptyDesc.textContent = searchOut.isEmptyQuery
+        ? ""
+        : t("searchNoResultsDesc", (state.searchQuery || "").trim());
+    }
+    if (elements.searchInput) {
+      elements.searchInput.setAttribute("aria-activedescendant", "");
+    }
+    return;
+  }
+
+  listbox.style.display = "flex";
+  if (elements.searchEmptyState) {
+    elements.searchEmptyState.style.display = "none";
+  }
+
+  results.forEach((item, index) => {
+    const optionId = `search-option-${index}`;
+    const isSelected = index === state.searchSelectedIndex;
+
+    const option = document.createElement("div");
+    option.id = optionId;
+    option.className = `search-result-option ${isSelected ? "is-active" : ""}`;
+    option.setAttribute("role", "option");
+    option.setAttribute("aria-selected", isSelected ? "true" : "false");
+    option.dataset.index = String(index);
+    option.dataset.linkId = item.link.id;
+
+    // Left: Favicon + Title + Domain
+    const left = document.createElement("div");
+    left.className = "search-result-left";
+
+    const faviconContainer = document.createElement("div");
+    faviconContainer.className = "link-favicon-container";
+    const placeholder = document.createElement("div");
+    placeholder.className = "link-favicon-placeholder";
+    placeholder.textContent = getDomainInitial(item.hostname || item.link.url);
+    faviconContainer.appendChild(placeholder);
+    left.appendChild(faviconContainer);
+
+    const textCol = document.createElement("div");
+    textCol.className = "search-result-text";
+
+    const titleRow = document.createElement("div");
+    titleRow.className = "search-result-title-row";
+
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "search-result-title";
+    appendHighlightedText(titleSpan, item.title, tokens);
+    titleRow.appendChild(titleSpan);
+
+    if (item.link.pinned) {
+      const pinTag = document.createElement("span");
+      pinTag.className = "search-result-pin-tag";
+      pinTag.textContent = t("searchSectionPinned");
+      titleRow.appendChild(pinTag);
+    }
+
+    textCol.appendChild(titleRow);
+
+    const domainSpan = document.createElement("span");
+    domainSpan.className = "search-result-domain";
+    const displayHostAndPath = item.urlPath
+      ? `${item.hostname}${item.urlPath}`
+      : item.hostname;
+    appendHighlightedText(domainSpan, displayHostAndPath, tokens);
+    textCol.appendChild(domainSpan);
+
+    left.appendChild(textCol);
+    option.appendChild(left);
+
+    // Right: Badge + Category / Group
+    const right = document.createElement("div");
+    right.className = "search-result-right";
+
+    if (item.badge) {
+      const badgeSpan = document.createElement("span");
+      const lowerBadge = item.badge.toLowerCase();
+      const isStandardBadge = ["local", "dev", "test", "prod"].includes(lowerBadge);
+      badgeSpan.className = `link-badge search-result-badge ${isStandardBadge ? `badge-${lowerBadge}` : "badge-custom"}`;
+      appendHighlightedText(badgeSpan, item.badge, tokens);
+      right.appendChild(badgeSpan);
+    }
+
+    const breadcrumb = document.createElement("span");
+    breadcrumb.className = "search-result-breadcrumb";
+
+    const catSpan = document.createElement("span");
+    catSpan.className = "search-result-category";
+    appendHighlightedText(catSpan, item.categoryName, tokens);
+    breadcrumb.appendChild(catSpan);
+
+    const sep = document.createElement("span");
+    sep.className = "search-result-sep";
+    sep.textContent = "/";
+    breadcrumb.appendChild(sep);
+
+    const grpSpan = document.createElement("span");
+    grpSpan.className = "search-result-group";
+    appendHighlightedText(grpSpan, item.groupName, tokens);
+    breadcrumb.appendChild(grpSpan);
+
+    right.appendChild(breadcrumb);
+    option.appendChild(right);
+
+    option.addEventListener("mouseenter", () => {
+      updateSearchActiveIndex(index, false);
+    });
+
+    option.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openSearchResult(item, Boolean(e.ctrlKey || e.metaKey));
+    });
+
+    loadFaviconOnDemand(option, item.link.url);
+    listbox.appendChild(option);
+  });
+
+  if (elements.searchInput) {
+    elements.searchInput.setAttribute(
+      "aria-activedescendant",
+      `search-option-${state.searchSelectedIndex}`
+    );
+  }
+}
+
+function updateSearchActiveIndex(newIndex, scrollIntoView = true) {
+  const count = state.searchResults.length;
+  if (count === 0) {
+    state.searchSelectedIndex = 0;
+    elements.searchInput?.setAttribute("aria-activedescendant", "");
+    return;
+  }
+
+  const normalized = ((newIndex % count) + count) % count;
+  state.searchSelectedIndex = normalized;
+
+  const listbox = elements.searchResultsListbox;
+  if (listbox) {
+    const options = listbox.querySelectorAll(".search-result-option");
+    options.forEach((opt, idx) => {
+      const active = idx === normalized;
+      opt.classList.toggle("is-active", active);
+      opt.setAttribute("aria-selected", active ? "true" : "false");
+      if (active && scrollIntoView && typeof opt.scrollIntoView === "function") {
+        opt.scrollIntoView({ block: "nearest" });
+      }
+    });
+  }
+
+  elements.searchInput?.setAttribute("aria-activedescendant", `search-option-${normalized}`);
+}
+
+function openSearchResult(item, openInNewTab = false) {
+  if (!item || !item.link) return;
+  const link = item.link;
+  const groupId = item.group?.id || link.groupId;
+
+  if (groupId) {
+    recordGroupClick(groupId).catch(() => {});
+  }
+  recordLinkClick(link.id).catch(() => {});
+
+  closeSearchModal();
+
+  if (openInNewTab) {
+    if (typeof chrome !== "undefined" && chrome.tabs?.create) {
+      chrome.tabs.create({ url: link.url, active: false });
+    } else if (typeof window !== "undefined" && typeof window.open === "function") {
+      window.open(link.url, "_blank");
+    }
+    return;
+  }
+
+  if (typeof window !== "undefined" && window.location) {
+    window.location.href = link.url;
+  }
+}
+
+function handleSearchDialogKeydown(e) {
+  if (!state.isSearchOpen) return;
+
+  if (e.key === "Escape") {
+    e.preventDefault();
+    e.stopPropagation();
+    closeSearchModal();
+    return;
+  }
+
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    e.stopPropagation();
+    updateSearchActiveIndex(state.searchSelectedIndex + 1, true);
+    return;
+  }
+
+  if (e.key === "ArrowUp") {
+    e.preventDefault();
+    e.stopPropagation();
+    updateSearchActiveIndex(state.searchSelectedIndex - 1, true);
+    return;
+  }
+
+  if (e.key === "Enter") {
+    // Do not intercept Enter if focus is explicitly on the close or shortcut settings button
+    const activeEl = typeof document !== "undefined" ? document.activeElement : null;
+    if (
+      activeEl &&
+      activeEl !== elements.searchInput &&
+      String(activeEl.tagName || "").toUpperCase() === "BUTTON"
+    ) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    const selected = state.searchResults[state.searchSelectedIndex];
+    if (selected) {
+      openSearchResult(selected, Boolean(e.ctrlKey || e.metaKey));
+    }
+    return;
+  }
+
+  if (e.key === "Tab" && elements.searchDialog) {
+    const focusables = Array.from(
+      elements.searchDialog.querySelectorAll("input, button")
+    ).filter((node) => !node.disabled);
+    if (focusables.length > 0) {
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = typeof document !== "undefined" ? document.activeElement : null;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+}
+
+function handleGlobalSearchKeydown(e) {
+  if (state.isSearchOpen) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSearchModal();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key?.toLowerCase() === "k") {
+      e.preventDefault();
+      elements.searchInput?.focus();
+    }
+    return;
+  }
+
+  const activeEl = typeof document !== "undefined" ? document.activeElement : null;
+  const decision = evaluateSearchShortcut(e, {
+    activeElement: activeEl,
+    hasBlockingModal: Boolean(state.activeModal)
+  });
+
+  if (decision.shouldOpen) {
+    if (decision.preventDefault && typeof e.preventDefault === "function") {
+      e.preventDefault();
+    }
+    openSearchModal("", activeEl);
+  }
+}
+
+function openExtensionShortcutSettings() {
+  const isFirefox =
+    typeof navigator !== "undefined" && /firefox/i.test(navigator.userAgent || "");
+  const targetUrl = isFirefox ? "about:addons" : "chrome://extensions/shortcuts";
+
+  if (typeof chrome !== "undefined" && chrome.tabs?.create) {
+    chrome.tabs.create({ url: targetUrl }).catch(() => {
+      alert(
+        isFirefox
+          ? "Open about:addons and click the Gear icon -> Manage Extension Shortcuts to customize shortcuts."
+          : "Open chrome://extensions/shortcuts in your address bar to customize extension shortcuts."
+      );
+    });
+  } else {
+    alert(
+      `To customize extension shortcuts, open ${targetUrl} in your browser.`
+    );
+  }
+}
+
 export {
   state,
   elements,
@@ -2341,6 +3379,13 @@ export {
   loadFaviconOnDemand,
   createGroupCard,
   createLinkItem,
+  createPinnedCard,
+  renderPinnedShelf,
   updateGroupLinksExpandState,
+  openSearchModal,
+  closeSearchModal,
+  refreshSearchResults,
+  handleSearchDialogKeydown,
+  handleGlobalSearchKeydown,
   initWorkbench
 };

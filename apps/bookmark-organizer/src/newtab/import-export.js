@@ -209,6 +209,12 @@ export function validateImportJson(rawJson) {
     if (lnk.badge !== undefined && typeof lnk.badge !== "string") {
       errors.push(`${path}.badge: must be a string when present`);
     }
+    if (lnk.pinned !== undefined && typeof lnk.pinned !== "boolean") {
+      errors.push(`${path}.pinned: must be a boolean when present`);
+    }
+    if (lnk.pinnedOrder !== undefined && lnk.pinnedOrder !== null && typeof lnk.pinnedOrder !== "number") {
+      errors.push(`${path}.pinnedOrder: must be a number when present`);
+    }
     if (!isNonEmptyString(lnk.groupId)) {
       errors.push(`${path}.groupId: required non-empty string`);
     } else if (!groupIds.has(lnk.groupId)) {
@@ -234,11 +240,24 @@ export function validateImportJson(rawJson) {
  * New records ALWAYS receive freshly generated IDs so they can never collide
  * with existing or previously deleted records referenced by older import jobs.
  */
-export function planImport(parsed, current, conflictResolutions = {}) {
+export function planImport(parsed, current, conflictResolutions = {}, options = {}) {
   const existingCategories = current.categories || [];
   const existingGroups = current.groups || [];
   const existingLinks = current.links || [];
   const warnings = [];
+
+  const isFullBackupObject = Boolean(
+    parsed && parsed.exportedAt && parsed.app === "PowerLessToy Bookmark Organizer"
+  );
+  const preservePinned =
+    typeof options.preservePinned === "boolean"
+      ? options.preservePinned
+      : existingLinks.length === 0 && isFullBackupObject;
+
+  let nextPinnedOrderOffset = existingLinks
+    .filter((l) => l && l.pinned === true)
+    .reduce((max, l) => Math.max(max, typeof l.pinnedOrder === "number" ? l.pinnedOrder : 0), 0);
+  let fallbackPinSequence = nextPinnedOrderOffset;
 
   const catById = new Map(existingCategories.map((c) => [c.id, c]));
   const grpById = new Map(existingGroups.map((g) => [g.id, g]));
@@ -328,11 +347,24 @@ export function planImport(parsed, current, conflictResolutions = {}) {
     const conflictKey = `links[${index}]`;
     const targetGroupId = groupTarget.get(inLnk.groupId);
     const key = `${targetGroupId}:::${normalizeUrl(inLnk.url)}`;
+    const shouldPin = Boolean(preservePinned && inLnk.pinned === true);
+    let assignedPinnedOrder = null;
+    if (shouldPin) {
+      if (typeof inLnk.pinnedOrder === "number") {
+        assignedPinnedOrder = nextPinnedOrderOffset + inLnk.pinnedOrder;
+        fallbackPinSequence = Math.max(fallbackPinSequence, assignedPinnedOrder);
+      } else {
+        fallbackPinSequence += 1;
+        assignedPinnedOrder = fallbackPinSequence;
+      }
+    }
+
     const candidate = {
       groupId: targetGroupId,
       name: inLnk.name.trim(),
       url: inLnk.url.trim(),
-      badge: (inLnk.badge || "").trim()
+      badge: (inLnk.badge || "").trim(),
+      ...(shouldPin ? { pinned: true, pinnedOrder: assignedPinnedOrder } : {})
     };
     const match = linkByKey.get(key);
 
@@ -449,7 +481,8 @@ export async function generateImportPreview({
   existingCategories,
   existingGroups,
   existingLinks,
-  existingImportJobs
+  existingImportJobs,
+  preservePinned
 }) {
   const { parsed, text, parseError } = parseImportContent(fileContent);
   if (parseError) return { valid: false, errors: [parseError], warnings: [] };
@@ -475,7 +508,7 @@ export async function generateImportPreview({
     .sort((a, b) => (b.importedAt || 0) - (a.importedAt || 0));
   const lastJob = previousJobs[0];
 
-  const plan = planImport(parsed, current);
+  const plan = planImport(parsed, current, {}, { preservePinned });
   const warnings = [...validation.warnings, ...plan.warnings];
   if (lastJob) {
     warnings.unshift(
@@ -511,7 +544,8 @@ export async function executeImport({
   importData,
   fileName = "bookmarks.json",
   conflictResolutions = {},
-  expectedPlanSignature
+  expectedPlanSignature,
+  preservePinned
 }) {
   const { parsed, text, parseError } = parseImportContent(importData);
   if (parseError) throw makeError("IMPORT_INVALID", parseError, { details: [parseError] });
@@ -540,7 +574,7 @@ export async function executeImport({
       const currentLnks = await stores[STORES.LINKS].getAll();
       const current = { categories: currentCats, groups: currentGrps, links: currentLnks };
 
-      const plan = planImport(parsed, current, conflictResolutions);
+      const plan = planImport(parsed, current, conflictResolutions, { preservePinned });
 
       if (expectedPlanSignature !== undefined && plan.signature !== expectedPlanSignature) {
         throw makeError(
@@ -906,9 +940,33 @@ export function generateBackupJson({ categories, groups, links }) {
       groupId: l.groupId,
       name: l.name,
       url: l.url,
-      badge: l.badge || ""
+      badge: l.badge || "",
+      ...(l.pinned === true
+        ? {
+            pinned: true,
+            ...(typeof l.pinnedOrder === "number" ? { pinnedOrder: l.pinnedOrder } : {})
+          }
+        : {})
     }))
   };
+}
+
+/**
+ * Restore a full backup JSON while preserving pinned states and pinnedOrder (BMK-PIN-001).
+ */
+export async function restoreBackup({
+  backupData,
+  fileName = "backup.json",
+  conflictResolutions = {},
+  expectedPlanSignature
+}) {
+  return executeImport({
+    importData: backupData,
+    fileName,
+    conflictResolutions,
+    expectedPlanSignature,
+    preservePinned: true
+  });
 }
 
 /**

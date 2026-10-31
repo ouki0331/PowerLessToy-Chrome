@@ -644,6 +644,224 @@ export async function deleteLink(data, linkId) {
 }
 
 /**
+ * Return pinned links in deterministic display order (BMK-PIN-001).
+ * Only returns links whose parent group still exists (when groups array is present).
+ */
+export function getPinnedLinks(data) {
+  if (!data || !Array.isArray(data.links)) return [];
+  const validGroupIds = Array.isArray(data.groups)
+    ? new Set(data.groups.map((g) => g.id))
+    : null;
+
+  return data.links
+    .filter((l) => l && l.pinned === true && (!validGroupIds || validGroupIds.has(l.groupId)))
+    .sort((a, b) => {
+      const orderA = typeof a.pinnedOrder === "number" ? a.pinnedOrder : Number.MAX_SAFE_INTEGER;
+      const orderB = typeof b.pinnedOrder === "number" ? b.pinnedOrder : Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      const timeA = a.pinnedAt || a.createdAt || 0;
+      const timeB = b.pinnedAt || b.createdAt || 0;
+      if (timeA !== timeB) return timeA - timeB;
+      return String(a.id).localeCompare(String(b.id));
+    });
+}
+
+/**
+ * Pin a link globally to the Pinned Shelf with optimistic revision lock (BMK-PIN-001).
+ * Each link can only be pinned once; calling pinLink on an already-pinned link is idempotent.
+ */
+export async function pinLink(data, linkId, expectedRevision) {
+  const updated = await withTransaction([STORES.LINKS], "readwrite", async (stores) => {
+    const latest = await stores[STORES.LINKS].get(linkId);
+    verifyRevision(latest, expectedRevision, "Link", linkId);
+
+    if (latest.pinned === true && typeof latest.pinnedOrder === "number") {
+      return latest;
+    }
+
+    const allLinks = await stores[STORES.LINKS].getAll();
+    const maxPinnedOrder = allLinks
+      .filter((l) => l.pinned === true && l.id !== linkId)
+      .reduce((max, l) => Math.max(max, typeof l.pinnedOrder === "number" ? l.pinnedOrder : 0), 0);
+
+    const nextRev = (latest.revision || 1) + 1;
+    const now = Date.now();
+    const mutated = {
+      ...latest,
+      pinned: true,
+      pinnedOrder: maxPinnedOrder + 1,
+      pinnedAt: now,
+      revision: nextRev,
+      updatedAt: now
+    };
+    await stores[STORES.LINKS].put(mutated);
+    return mutated;
+  });
+
+  if (data && typeof data === "object" && Array.isArray(data.links)) {
+    const item = data.links.find((l) => l.id === linkId);
+    if (item) Object.assign(item, updated);
+  }
+
+  return updated;
+}
+
+/**
+ * Unpin a link from the Pinned Shelf with optimistic revision lock (BMK-PIN-001).
+ */
+export async function unpinLink(data, linkId, expectedRevision) {
+  const updated = await withTransaction([STORES.LINKS], "readwrite", async (stores) => {
+    const latest = await stores[STORES.LINKS].get(linkId);
+    verifyRevision(latest, expectedRevision, "Link", linkId);
+
+    if (!latest.pinned) {
+      return latest;
+    }
+
+    const nextRev = (latest.revision || 1) + 1;
+    const now = Date.now();
+    const mutated = {
+      ...latest,
+      pinned: false,
+      pinnedOrder: null,
+      pinnedAt: null,
+      revision: nextRev,
+      updatedAt: now
+    };
+    await stores[STORES.LINKS].put(mutated);
+    return mutated;
+  });
+
+  if (data && typeof data === "object" && Array.isArray(data.links)) {
+    const item = data.links.find((l) => l.id === linkId);
+    if (item) Object.assign(item, updated);
+  }
+
+  return updated;
+}
+
+/**
+ * Toggle pin state of a link with optimistic revision lock (BMK-PIN-001).
+ */
+export async function togglePinLink(data, linkId, expectedRevision) {
+  const current = await withTransaction([STORES.LINKS], "readonly", (stores) =>
+    stores[STORES.LINKS].get(linkId)
+  );
+  if (!current) {
+    throw new Error(`Link ${linkId} not found`);
+  }
+  if (current.pinned === true) {
+    return unpinLink(data, linkId, expectedRevision);
+  }
+  return pinLink(data, linkId, expectedRevision);
+}
+
+/**
+ * Batch reorder pinned links in a single atomic transaction (BMK-PIN-001).
+ */
+export async function reorderPinnedLinks(data, orderedLinkIds) {
+  if (!Array.isArray(orderedLinkIds) || orderedLinkIds.length === 0) {
+    return [];
+  }
+
+  const updatedLinks = await withTransaction([STORES.LINKS], "readwrite", async (stores) => {
+    const allLinks = await stores[STORES.LINKS].getAll();
+    const pinnedLinks = allLinks.filter((l) => l.pinned === true);
+    const pinnedMap = new Map(pinnedLinks.map((l) => [l.id, l]));
+
+    const seen = new Set();
+    const finalSequence = [];
+    for (const id of orderedLinkIds) {
+      if (pinnedMap.has(id) && !seen.has(id)) {
+        seen.add(id);
+        finalSequence.push(pinnedMap.get(id));
+      }
+    }
+    // Preserve any pinned links not included in orderedLinkIds at the end
+    const remaining = pinnedLinks
+      .filter((l) => !seen.has(l.id))
+      .sort((a, b) => (a.pinnedOrder ?? 999999) - (b.pinnedOrder ?? 999999));
+    finalSequence.push(...remaining);
+
+    const now = Date.now();
+    const updated = [];
+
+    for (let i = 0; i < finalSequence.length; i++) {
+      const lnk = finalSequence[i];
+      const newOrder = i + 1;
+      if (lnk.pinnedOrder !== newOrder) {
+        const nextRev = (lnk.revision || 1) + 1;
+        const mutated = {
+          ...lnk,
+          pinnedOrder: newOrder,
+          revision: nextRev,
+          updatedAt: now
+        };
+        await stores[STORES.LINKS].put(mutated);
+        updated.push(mutated);
+      }
+    }
+
+    return updated;
+  });
+
+  if (data && typeof data === "object" && Array.isArray(data.links)) {
+    for (const updated of updatedLinks) {
+      const item = data.links.find((l) => l.id === updated.id);
+      if (item) Object.assign(item, updated);
+    }
+  }
+
+  return updatedLinks;
+}
+
+const LINK_METRICS_META_KEY = "link_metrics";
+
+/**
+ * Record click usage for an individual link without touching link revision (BMK-SEARCH-001).
+ */
+export async function recordLinkClick(linkId) {
+  if (!linkId) return null;
+  return withTransaction([STORES.METADATA], "readwrite", async (stores) => {
+    const record = (await stores[STORES.METADATA].get(LINK_METRICS_META_KEY)) || {
+      key: LINK_METRICS_META_KEY,
+      items: {}
+    };
+    const items = record.items && typeof record.items === "object" ? { ...record.items } : {};
+    const existing = items[linkId] || { linkId, usageCount: 0, lastUsedAt: 0 };
+    const updated = {
+      linkId,
+      usageCount: (existing.usageCount || 0) + 1,
+      lastUsedAt: Date.now()
+    };
+    items[linkId] = updated;
+    await stores[STORES.METADATA].put({
+      key: LINK_METRICS_META_KEY,
+      items
+    });
+    return updated;
+  });
+}
+
+/**
+ * Read all link click metrics as a Map of linkId -> { linkId, usageCount, lastUsedAt }
+ */
+export async function getLinkMetricsMap() {
+  return withTransaction([STORES.METADATA], "readonly", async (stores) => {
+    const record = await stores[STORES.METADATA].get(LINK_METRICS_META_KEY);
+    const map = new Map();
+    if (record && record.items && typeof record.items === "object") {
+      for (const [k, v] of Object.entries(record.items)) {
+        if (v && typeof v === "object") {
+          map.set(k, v);
+        }
+      }
+    }
+    return map;
+  });
+}
+
+/**
  * Fetch all import jobs
  */
 export async function getImportJobs() {

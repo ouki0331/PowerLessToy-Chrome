@@ -29,6 +29,13 @@
       </div>
 
       <div class="header-actions">
+        <!-- Centralized Search Action (BMK-SEARCH-001) -->
+        <button id="openSearchBtn" class="btn btn-secondary btn-sm search-trigger-btn" type="button" title="Search all bookmarks (Ctrl/Cmd+K or /)" aria-haspopup="dialog" aria-expanded="false">
+          <span id="searchBtnIcon" class="icon-slot" aria-hidden="true"></span>
+          <span id="searchBtnText">Search</span>
+          <kbd id="searchShortcutBadge" class="search-shortcut-kbd" aria-hidden="true">⌘K</kbd>
+        </button>
+
         <!-- Theme Action -->
         <button id="themeToggleBtn" class="btn btn-ghost btn-sm" title="Theme (Light / Dark / System / Auto)" aria-haspopup="dialog" aria-expanded="false">
           <span id="themeBtnIcon" class="icon-slot" aria-hidden="true"></span>
@@ -109,6 +116,28 @@
       </div>
     </div>
 
+    <!-- Global Pinned Shelf (BMK-PIN-001) -->
+    <section id="pinnedShelf" class="pinned-shelf is-empty" aria-labelledby="pinnedShelfTitle">
+      <div class="pinned-shelf-header" id="pinnedShelfHeader">
+        <div class="pinned-shelf-title-group">
+          <span class="pinned-shelf-icon icon-slot" id="pinnedShelfIcon" aria-hidden="true"></span>
+          <h2 class="pinned-shelf-title" id="pinnedShelfTitle">Pinned Bookmarks</h2>
+          <span class="pinned-shelf-count" id="pinnedShelfCount">0</span>
+        </div>
+        <div class="pinned-shelf-actions">
+          <button id="togglePinnedExpandBtn" class="btn btn-ghost btn-sm pinned-expand-toggle" type="button" style="display: none;" aria-expanded="false" aria-controls="pinnedGrid">
+            <span id="togglePinnedExpandText">Show All</span>
+          </button>
+        </div>
+      </div>
+      <div id="pinnedEmptyState" class="pinned-empty-state">
+        <span id="pinnedEmptyText">No pinned bookmarks yet. Hover any link or use Manage Content to pin key links here.</span>
+      </div>
+      <div id="pinnedGrid" class="pinned-grid" role="list" style="display: none;">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
     <!-- Active Category Header -->
     <div class="category-header" id="categoryHeader">
       <div class="cat-title-area">
@@ -166,6 +195,48 @@
 
   <!-- Modal Container for Dialogs -->
   <div id="modalContainer" style="display: none;"></div>
+
+  <!-- Spotlight Centralized Search Overlay (BMK-SEARCH-001) -->
+  <div id="searchOverlay" class="search-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="searchDialogTitle">
+    <div id="searchDialog" class="search-dialog">
+      <h2 id="searchDialogTitle" class="sr-only">Search Bookmarks</h2>
+      <div class="search-bar-header">
+        <span id="searchModalIcon" class="search-modal-icon icon-slot" aria-hidden="true"></span>
+        <input
+          type="text"
+          id="searchInput"
+          class="search-input"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded="true"
+          aria-controls="searchResultsListbox"
+          aria-activedescendant=""
+          aria-label="Search bookmarks across all categories"
+          placeholder="Search all categories by title, domain, path, group, or tag..."
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <button id="closeSearchBtn" class="btn-icon search-close-btn" type="button" aria-label="Close search" title="Close (Esc)">
+          <span id="closeSearchIcon" class="icon-slot" aria-hidden="true"></span>
+        </button>
+      </div>
+      <div class="search-results-body" id="searchResultsBody">
+        <div id="searchSectionLabel" class="search-section-label"></div>
+        <div id="searchResultsListbox" class="search-results-listbox" role="listbox" aria-label="Bookmark search results"></div>
+        <div id="searchEmptyState" class="search-empty-state" style="display: none;">
+          <p id="searchEmptyTitle" class="search-empty-title">No matching bookmarks found</p>
+          <p id="searchEmptyDesc" class="search-empty-desc"></p>
+        </div>
+      </div>
+      <div class="search-dialog-footer">
+        <span id="searchFooterNavHint" class="search-footer-hint">↑↓ Select · Enter Open · Ctrl/⌘+Enter New Tab · Esc Close</span>
+        <div class="search-footer-right">
+          <span id="searchShortcutNotice" class="search-shortcut-tip">Tip: Press / anywhere on this page</span>
+          <button id="searchShortcutSettingsBtn" class="btn btn-ghost btn-sm search-shortcut-settings-btn" type="button">Configure Shortcuts</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Background Popover Menu Container -->
   <div id="bgPopoverContainer" class="bg-popover-container" style="display: none;"></div>
