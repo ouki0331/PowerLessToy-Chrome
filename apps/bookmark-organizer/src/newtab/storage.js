@@ -542,10 +542,11 @@ export async function getGroupMetricsMap() {
 /**
  * Add a link to a group
  */
-export async function addLink(data, groupId, { name, url, badge = "" }) {
+export async function addLink(data, groupId, { name, url, badge = "", hidden = false }) {
   const trimmedName = (name || "").trim();
   const trimmedUrl = (url || "").trim();
   const trimmedBadge = (badge || "").trim();
+  const isHidden = Boolean(hidden);
 
   if (!trimmedName) {
     throw new Error("Link name cannot be empty");
@@ -568,6 +569,7 @@ export async function addLink(data, groupId, { name, url, badge = "" }) {
       name: trimmedName,
       url: trimmedUrl,
       badge: trimmedBadge,
+      hidden: isHidden,
       revision: 1,
       createdAt: now,
       updatedAt: now
@@ -586,7 +588,7 @@ export async function addLink(data, groupId, { name, url, badge = "" }) {
 /**
  * Edit an existing link with optimistic revision lock
  */
-export async function editLink(data, linkId, { name, url, badge = "" }, expectedRevision) {
+export async function editLink(data, linkId, { name, url, badge = "", hidden }, expectedRevision) {
   const trimmedName = (name || "").trim();
   const trimmedUrl = (url || "").trim();
   const trimmedBadge = (badge || "").trim();
@@ -604,11 +606,13 @@ export async function editLink(data, linkId, { name, url, badge = "" }, expected
 
     const nextRev = (latest.revision || 1) + 1;
     const now = Date.now();
+    const nextHidden = hidden !== undefined ? Boolean(hidden) : Boolean(latest.hidden);
     const mutated = {
       ...latest,
       name: trimmedName,
       url: trimmedUrl,
       badge: trimmedBadge,
+      hidden: nextHidden,
       revision: nextRev,
       updatedAt: now
     };
@@ -644,17 +648,48 @@ export async function deleteLink(data, linkId) {
 }
 
 /**
- * Return pinned links in deterministic display order (BMK-PIN-001).
+ * Return pinned links in deterministic display order (BMK-PIN-001 / BMK-PIN-002).
  * Only returns links whose parent group still exists (when groups array is present).
+ * Supports optional scoping by categoryId, hidden visibility (BMK-PRIV-001),
+ * and environment badge filter (BMK-ENV-001).
  */
-export function getPinnedLinks(data) {
+export function getPinnedLinks(data, options = {}) {
   if (!data || !Array.isArray(data.links)) return [];
+
+  const normalizedOptions =
+    typeof options === "string"
+      ? { categoryId: options }
+      : options && typeof options === "object"
+        ? options
+        : {};
+
+  const {
+    categoryId = null,
+    includeHidden = false,
+    envFilter = "ALL"
+  } = normalizedOptions;
+
   const validGroupIds = Array.isArray(data.groups)
-    ? new Set(data.groups.map((g) => g.id))
+    ? new Set(
+        data.groups
+          .filter((g) => g && (!categoryId || g.categoryId === categoryId))
+          .map((g) => g.id)
+      )
     : null;
 
+  const activeEnv = String(envFilter || "ALL").trim().toUpperCase();
+
   return data.links
-    .filter((l) => l && l.pinned === true && (!validGroupIds || validGroupIds.has(l.groupId)))
+    .filter((l) => {
+      if (!l || l.pinned !== true) return false;
+      if (validGroupIds && !validGroupIds.has(l.groupId)) return false;
+      if (!includeHidden && l.hidden === true) return false;
+      if (activeEnv && activeEnv !== "ALL") {
+        const linkBadge = String(l.badge || "").trim().toUpperCase();
+        if (linkBadge !== activeEnv) return false;
+      }
+      return true;
+    })
     .sort((a, b) => {
       const orderA = typeof a.pinnedOrder === "number" ? a.pinnedOrder : Number.MAX_SAFE_INTEGER;
       const orderB = typeof b.pinnedOrder === "number" ? b.pinnedOrder : Number.MAX_SAFE_INTEGER;
@@ -757,16 +792,41 @@ export async function togglePinLink(data, linkId, expectedRevision) {
 }
 
 /**
- * Batch reorder pinned links in a single atomic transaction (BMK-PIN-001).
+ * Batch reorder pinned links in a single atomic transaction (BMK-PIN-001 / BMK-PIN-002).
+ * Reordering is scoped to a single Tab (categoryId) so dragging pinned links in one Tab
+ * never alters the order or revisions of pinned links in other Tabs.
  */
-export async function reorderPinnedLinks(data, orderedLinkIds) {
+export async function reorderPinnedLinks(data, orderedLinkIds, categoryId = null) {
   if (!Array.isArray(orderedLinkIds) || orderedLinkIds.length === 0) {
     return [];
   }
 
-  const updatedLinks = await withTransaction([STORES.LINKS], "readwrite", async (stores) => {
+  const updatedLinks = await withTransaction([STORES.GROUPS, STORES.LINKS], "readwrite", async (stores) => {
+    const allGroups = await stores[STORES.GROUPS].getAll();
     const allLinks = await stores[STORES.LINKS].getAll();
-    const pinnedLinks = allLinks.filter((l) => l.pinned === true);
+    const groupById = new Map(allGroups.map((g) => [g.id, g]));
+
+    let targetCategoryId = categoryId;
+    if (!targetCategoryId) {
+      for (const id of orderedLinkIds) {
+        const foundLink = allLinks.find((l) => l && l.id === id);
+        if (foundLink) {
+          const grp = groupById.get(foundLink.groupId);
+          if (grp && grp.categoryId) {
+            targetCategoryId = grp.categoryId;
+            break;
+          }
+        }
+      }
+    }
+
+    const catGroupIds = targetCategoryId
+      ? new Set(allGroups.filter((g) => g && g.categoryId === targetCategoryId).map((g) => g.id))
+      : null;
+
+    const pinnedLinks = allLinks.filter(
+      (l) => l && l.pinned === true && (!catGroupIds || catGroupIds.has(l.groupId))
+    );
     const pinnedMap = new Map(pinnedLinks.map((l) => [l.id, l]));
 
     const seen = new Set();
@@ -777,7 +837,7 @@ export async function reorderPinnedLinks(data, orderedLinkIds) {
         finalSequence.push(pinnedMap.get(id));
       }
     }
-    // Preserve any pinned links not included in orderedLinkIds at the end
+    // Preserve any pinned links within the same category not included in orderedLinkIds at the end
     const remaining = pinnedLinks
       .filter((l) => !seen.has(l.id))
       .sort((a, b) => (a.pinnedOrder ?? 999999) - (b.pinnedOrder ?? 999999));

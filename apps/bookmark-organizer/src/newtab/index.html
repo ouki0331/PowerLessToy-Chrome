@@ -146,6 +146,14 @@
       </div>
 
       <div class="cat-manage-controls">
+        <button id="envFilterBtn" class="btn btn-secondary btn-sm env-filter-btn" type="button" data-env-filter="ALL" aria-pressed="false" title="Filter by environment (All). Click or press E to cycle.">
+          <span class="env-filter-dot" id="envFilterDot" aria-hidden="true"></span>
+          <span id="envFilterBtnText">Env: All</span>
+          <kbd class="env-filter-kbd" aria-hidden="true">E</kbd>
+        </button>
+        <button id="privacyToggleBtn" class="btn btn-ghost btn-sm btn-icon privacy-toggle-btn" type="button" aria-pressed="false" title="Temporarily reveal hidden bookmarks" aria-label="Temporarily reveal hidden bookmarks">
+          <span id="privacyToggleIcon" class="icon-slot" aria-hidden="true"></span>
+        </button>
         <div class="cat-sort-controls" id="catSortControls" role="group" aria-label="Sort groups">
           <button id="sortMostUsedBtn" class="btn btn-ghost btn-sm btn-icon cat-sort-btn" type="button" data-sort="most_used" title="Sort by Most Used" aria-label="Sort by Most Used" aria-pressed="false">
             <span class="icon-slot"></span>
@@ -187,6 +195,15 @@
       <button id="createFirstGroupBtn" class="btn btn-primary">
         <span class="icon-slot" aria-hidden="true"></span>
         <span class="btn-text">Create First Group</span>
+      </button>
+    </div>
+
+    <!-- Lightweight Empty State for Environment Filter (BMK-ENV-001) -->
+    <div class="empty-state env-empty-state" id="envFilterEmptyState" style="display: none;">
+      <h3 class="empty-state-title" id="envFilterEmptyTitle">No matching bookmarks in this tab</h3>
+      <p class="empty-state-lead" id="envFilterEmptyDesc">No links in the current category match the active environment filter.</p>
+      <button id="resetEnvFilterBtn" class="btn btn-secondary" type="button">
+        <span id="resetEnvFilterText">Show All Environments</span>
       </button>
     </div>
 

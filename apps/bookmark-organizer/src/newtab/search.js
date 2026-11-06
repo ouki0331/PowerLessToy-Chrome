@@ -81,8 +81,12 @@ export function tokenizeSearchQuery(query) {
 
 /**
  * Build searchable index entries across ALL categories, groups, and links.
+ * Excludes hidden bookmarks by default unless includeHidden === true (BMK-PRIV-001).
  */
-export function buildSearchIndex(data, { linkMetricsMap = new Map(), groupMetricsMap = new Map() } = {}) {
+export function buildSearchIndex(
+  data,
+  { linkMetricsMap = new Map(), groupMetricsMap = new Map(), includeHidden = false } = {}
+) {
   if (!data || !Array.isArray(data.links)) return [];
 
   const categories = Array.isArray(data.categories) ? data.categories : [];
@@ -94,6 +98,7 @@ export function buildSearchIndex(data, { linkMetricsMap = new Map(), groupMetric
   const entries = [];
   for (const link of data.links) {
     if (!link || typeof link !== "object") continue;
+    if (!includeHidden && link.hidden === true) continue;
     const group = grpMap.get(link.groupId);
     if (!group) continue;
     const category = catMap.get(group.categoryId);
@@ -258,12 +263,12 @@ export function compareSearchResults(a, b) {
  */
 export function getEmptyQueryResults(
   data,
-  { linkMetricsMap = new Map(), groupMetricsMap = new Map(), maxRecent = 8 } = {}
+  { linkMetricsMap = new Map(), groupMetricsMap = new Map(), maxRecent = 8, includeHidden = false } = {}
 ) {
-  const index = buildSearchIndex(data, { linkMetricsMap, groupMetricsMap });
+  const index = buildSearchIndex(data, { linkMetricsMap, groupMetricsMap, includeHidden });
   const entryById = new Map(index.map((e) => [e.link.id, e]));
 
-  const pinnedLinks = getPinnedLinks(data);
+  const pinnedLinks = getPinnedLinks(data, { includeHidden });
   const pinnedResults = [];
   const pinnedIds = new Set();
 
@@ -317,18 +322,19 @@ export function getEmptyQueryResults(
 
 /**
  * Execute centralized search across all categories (BMK-SEARCH-001).
+ * Excludes hidden bookmarks when includeHidden === false (BMK-PRIV-001).
  */
 export function searchBookmarks(
   data,
   query,
-  { linkMetricsMap = new Map(), groupMetricsMap = new Map(), maxRecent = 8 } = {}
+  { linkMetricsMap = new Map(), groupMetricsMap = new Map(), maxRecent = 8, includeHidden = false } = {}
 ) {
   const queryObj = tokenizeSearchQuery(query);
   if (queryObj.tokens.length === 0) {
-    return getEmptyQueryResults(data, { linkMetricsMap, groupMetricsMap, maxRecent });
+    return getEmptyQueryResults(data, { linkMetricsMap, groupMetricsMap, maxRecent, includeHidden });
   }
 
-  const index = buildSearchIndex(data, { linkMetricsMap, groupMetricsMap });
+  const index = buildSearchIndex(data, { linkMetricsMap, groupMetricsMap, includeHidden });
   const matched = [];
 
   for (const entry of index) {
@@ -491,6 +497,99 @@ export function evaluateSearchShortcut(event, { activeElement = null, hasBlockin
 
   return { shouldOpen: false };
 }
+
+/**
+ * Standard environment cycle order (BMK-ENV-001):
+ * ALL -> LOCAL -> DEV -> TEST -> PROD -> ALL
+ */
+export const ENV_FILTER_ORDER = ["ALL", "LOCAL", "DEV", "TEST", "PROD"];
+
+/**
+ * Advance environment filter to the next value in the cycle (BMK-ENV-001).
+ */
+export function getNextEnvFilter(currentFilter = "ALL") {
+  const normalized = String(currentFilter || "ALL").trim().toUpperCase();
+  const idx = ENV_FILTER_ORDER.indexOf(normalized);
+  if (idx === -1) {
+    return ENV_FILTER_ORDER[1];
+  }
+  return ENV_FILTER_ORDER[(idx + 1) % ENV_FILTER_ORDER.length];
+}
+
+/**
+ * Check whether a bookmark link matches the active environment filter (BMK-ENV-001).
+ * - "ALL" matches all links (including links with no badge or custom badges).
+ * - Standard environments ("LOCAL", "DEV", "TEST", "PROD") match case-insensitively.
+ * - Links without a badge or with custom badges only match in "ALL" state.
+ */
+export function matchesEnvFilter(link, envFilter = "ALL") {
+  const active = String(envFilter || "ALL").trim().toUpperCase();
+  if (!active || active === "ALL") {
+    return true;
+  }
+  if (!link || typeof link !== "object") {
+    return false;
+  }
+  const badge = String(link.badge || "").trim().toUpperCase();
+  if (!badge) {
+    return false;
+  }
+  return badge === active;
+}
+
+/**
+ * Check whether an element is any keyboard text input control (including #searchInput,
+ * form inputs, textareas, selects, contenteditable elements, or elements inside open modals).
+ */
+export function isKeyboardInputControl(el) {
+  if (!el || typeof el !== "object") return false;
+  const tag = String(el.tagName || "").toUpperCase();
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+    return true;
+  }
+  if (el.isContentEditable === true) {
+    return true;
+  }
+  const ceAttr = typeof el.getAttribute === "function" ? el.getAttribute("contenteditable") : null;
+  if (ceAttr === "" || ceAttr === "true" || ceAttr === "plaintext-only") {
+    return true;
+  }
+  const roleAttr = typeof el.getAttribute === "function" ? el.getAttribute("role") : null;
+  if (roleAttr === "textbox" || roleAttr === "searchbox" || roleAttr === "combobox") {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Evaluate whether a keydown event should cycle the environment filter via 'E' shortcut (BMK-ENV-001).
+ */
+export function evaluateEnvFilterShortcut(
+  event,
+  { activeElement = null, hasBlockingModal = false, isSearchOpen = false } = {}
+) {
+  if (!event || typeof event.key !== "string") {
+    return { shouldCycle: false };
+  }
+  if (event.ctrlKey || event.metaKey || event.altKey) {
+    return { shouldCycle: false, reason: "modifier_key" };
+  }
+  if (event.key.toLowerCase() !== "e") {
+    return { shouldCycle: false };
+  }
+  if (hasBlockingModal || isSearchOpen) {
+    return { shouldCycle: false, reason: "blocking_modal" };
+  }
+  const target = event.target || activeElement;
+  if (isKeyboardInputControl(target) || isKeyboardInputControl(activeElement)) {
+    return { shouldCycle: false, reason: "input_focused" };
+  }
+  return {
+    shouldCycle: true,
+    preventDefault: true
+  };
+}
+
 
 /**
  * Detect platform shortcut label for display in UI ('⌘K' on macOS, 'Ctrl+K' elsewhere).

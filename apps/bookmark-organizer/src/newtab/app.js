@@ -65,7 +65,11 @@ import {
   searchBookmarks,
   appendHighlightedText,
   evaluateSearchShortcut,
-  getPlatformSearchShortcutLabel
+  getPlatformSearchShortcutLabel,
+  ENV_FILTER_ORDER,
+  getNextEnvFilter,
+  matchesEnvFilter,
+  evaluateEnvFilterShortcut
 } from "./search.js";
 
 const FEATURE_ICONS = {
@@ -95,7 +99,17 @@ let state = {
   searchQuery: "",
   searchSelectedIndex: 0,
   searchResults: [],
-  searchTriggerElement: null
+  searchTriggerElement: null,
+  envFilter: "ALL",
+  showHiddenBookmarks: false,
+  get activeCategoryId() {
+    return this.data?.activeCategoryId || null;
+  },
+  set activeCategoryId(val) {
+    if (this.data && val) {
+      this.data.activeCategoryId = val;
+    }
+  }
 };
 
 // DOM References
@@ -199,7 +213,19 @@ const elements = {
   get searchEmptyDesc() { return el("searchEmptyDesc"); },
   get searchFooterNavHint() { return el("searchFooterNavHint"); },
   get searchShortcutNotice() { return el("searchShortcutNotice"); },
-  get searchShortcutSettingsBtn() { return el("searchShortcutSettingsBtn"); }
+  get searchShortcutSettingsBtn() { return el("searchShortcutSettingsBtn"); },
+
+  // Environment Filter & Privacy Controls (BMK-ENV-001 & BMK-PRIV-001)
+  get envFilterBtn() { return el("envFilterBtn"); },
+  get envFilterBtnText() { return el("envFilterBtnText"); },
+  get envFilterDot() { return el("envFilterDot"); },
+  get envFilterEmptyState() { return el("envFilterEmptyState"); },
+  get envFilterEmptyTitle() { return el("envFilterEmptyTitle"); },
+  get envFilterEmptyDesc() { return el("envFilterEmptyDesc"); },
+  get resetEnvFilterBtn() { return el("resetEnvFilterBtn"); },
+  get resetEnvFilterText() { return el("resetEnvFilterText"); },
+  get privacyToggleBtn() { return el("privacyToggleBtn"); },
+  get privacyToggleIcon() { return el("privacyToggleIcon"); }
 };
 
 // Initialize Application
@@ -302,6 +328,8 @@ function initStaticIcons() {
   if (elements.searchBtnIcon) renderSvgIcon(elements.searchBtnIcon, FEATURE_ICONS.search);
   if (elements.searchModalIcon) renderSvgIcon(elements.searchModalIcon, FEATURE_ICONS.search);
   if (elements.closeSearchIcon) renderSvgIcon(elements.closeSearchIcon, SVG_ICONS.close);
+  updatePrivacyToggleUI();
+  updateEnvFilterUI();
 }
 
 function updateI18nLabels() {
@@ -352,11 +380,17 @@ function updateI18nLabels() {
   }
   updateThemeButtonUI();
   updateBackgroundUI(elements);
+  updateEnvFilterUI();
+  updatePrivacyToggleUI();
 }
 
 async function initWorkbench() {
   try {
-    elements.errorBanner.style.display = "none";
+    if (elements.errorBanner) elements.errorBanner.style.display = "none";
+    // Always restore hidden bookmarks to hidden on page init / refresh (BMK-PRIV-001)
+    state.showHiddenBookmarks = false;
+    updatePrivacyToggleUI();
+    updateEnvFilterUI();
     state.data = await loadWorkbenchData();
     await renderAll();
   } catch (err) {
@@ -499,6 +533,19 @@ function setupEventListeners() {
   elements.sortMostUsedBtn?.addEventListener("click", () => handleSortToggle("most_used"));
   elements.sortRecentlyUsedBtn?.addEventListener("click", () => handleSortToggle("recently_used"));
   elements.sortCreatedBtn?.addEventListener("click", () => handleSortToggle("created_at"));
+
+  // Environment Filter Cycling Button & Reset (BMK-ENV-001)
+  elements.envFilterBtn?.addEventListener("click", () => {
+    cycleEnvFilter();
+  });
+  elements.resetEnvFilterBtn?.addEventListener("click", () => {
+    setEnvFilter("ALL");
+  });
+
+  // Private / Hidden Bookmarks Lock Toggle Button (BMK-PRIV-001)
+  elements.privacyToggleBtn?.addEventListener("click", () => {
+    toggleHiddenBookmarksVisibility();
+  });
 
   // Pinned Shelf Expand/Collapse Toggle (BMK-PIN-001)
   elements.togglePinnedExpandBtn?.addEventListener("click", () => {
@@ -1097,6 +1144,93 @@ function getActiveCategory() {
 }
 
 /**
+ * Check whether a bookmark link should be displayed in the current UI view (BMK-PRIV-001 & BMK-ENV-001).
+ * Hidden rule ALWAYS takes strict precedence over environment filter.
+ */
+function isLinkVisibleInCurrentView(link) {
+  if (!link || typeof link !== "object") return false;
+  if (!state.showHiddenBookmarks && link.hidden === true) {
+    return false;
+  }
+  return matchesEnvFilter(link, state.envFilter);
+}
+
+function updateEnvFilterUI() {
+  const env = String(state.envFilter || "ALL").trim().toUpperCase();
+  const isActive = env !== "ALL";
+  if (elements.envFilterBtn) {
+    elements.envFilterBtn.dataset.envFilter = env;
+    elements.envFilterBtn.setAttribute("aria-pressed", isActive ? "true" : "false");
+    elements.envFilterBtn.classList.toggle("is-active", isActive);
+    const title = t("envFilterBtnTitle", env);
+    elements.envFilterBtn.title = title;
+    elements.envFilterBtn.setAttribute("aria-label", title);
+  }
+  if (elements.envFilterBtnText) {
+    elements.envFilterBtnText.textContent = t("envFilterBtnText", env);
+  }
+  if (elements.resetEnvFilterText) {
+    elements.resetEnvFilterText.textContent = t("envFilterResetBtn");
+  }
+}
+
+function setEnvFilter(nextFilter = "ALL") {
+  const normalized = String(nextFilter || "ALL").trim().toUpperCase();
+  state.envFilter = ENV_FILTER_ORDER.includes(normalized) ? normalized : "ALL";
+  updateEnvFilterUI();
+  renderCategoryContent();
+  return state.envFilter;
+}
+
+function cycleEnvFilter() {
+  return setEnvFilter(getNextEnvFilter(state.envFilter));
+}
+
+function updatePrivacyToggleUI() {
+  const revealed = Boolean(state.showHiddenBookmarks);
+  if (elements.privacyToggleBtn) {
+    elements.privacyToggleBtn.setAttribute("aria-pressed", revealed ? "true" : "false");
+    elements.privacyToggleBtn.classList.toggle("is-unlocked", revealed);
+    const title = revealed ? t("hideHiddenTitle") : t("showHiddenTitle");
+    elements.privacyToggleBtn.title = title;
+    elements.privacyToggleBtn.setAttribute("aria-label", title);
+  }
+  const iconTarget = elements.privacyToggleIcon || elements.privacyToggleBtn;
+  if (iconTarget) {
+    renderSvgIcon(iconTarget, revealed ? SVG_ICONS.unlock : SVG_ICONS.lock);
+  }
+}
+
+function setShowHiddenBookmarks(visible) {
+  state.showHiddenBookmarks = Boolean(visible);
+  updatePrivacyToggleUI();
+  renderAll(false);
+  if (state.isSearchOpen) {
+    refreshSearchResults();
+  }
+  return state.showHiddenBookmarks;
+}
+
+function toggleHiddenBookmarksVisibility() {
+  return setShowHiddenBookmarks(!state.showHiddenBookmarks);
+}
+
+function createHiddenIndicatorBadge() {
+  const pill = document.createElement("span");
+  pill.className = "link-hidden-indicator";
+  pill.title = t("hideBookmarkHint");
+  const iconSpan = document.createElement("span");
+  iconSpan.className = "link-hidden-indicator-icon icon-slot";
+  renderSvgIcon(iconSpan, SVG_ICONS.lock);
+  const textSpan = document.createElement("span");
+  textSpan.className = "link-hidden-indicator-text";
+  textSpan.textContent = t("hiddenBookmarkBadge");
+  pill.appendChild(iconSpan);
+  pill.appendChild(textSpan);
+  return pill;
+}
+
+/**
  * Switch active category without destroying tab DOM elements.
  * Preserves keyboard focus on the newly selected tab.
  */
@@ -1146,13 +1280,19 @@ async function renderCategoryContent() {
 let currentDraggedPinnedId = null;
 
 /**
- * Render the Global Pinned Shelf at the top of mainContent (BMK-PIN-001).
- * Visible across all categories; updates synchronously on pin, unpin, edit, delete, or reorder.
+ * Render the Tab-Scoped Pinned Shelf at the top of mainContent (BMK-PIN-002).
+ * Scoped to the active category and respects both hidden state (BMK-PRIV-001)
+ * and active environment filter (BMK-ENV-001).
  */
 function renderPinnedShelf() {
   if (!elements.pinnedShelf || !state.data) return;
 
-  const pinnedLinks = getPinnedLinks(state.data);
+  const activeCat = getActiveCategory();
+  const pinnedLinks = getPinnedLinks(state.data, {
+    categoryId: activeCat?.id || null,
+    includeHidden: Boolean(state.showHiddenBookmarks),
+    envFilter: state.envFilter || "ALL"
+  });
   const count = pinnedLinks.length;
 
   if (elements.pinnedShelfTitle) {
@@ -1162,7 +1302,9 @@ function renderPinnedShelf() {
     elements.pinnedShelfCount.textContent = String(count);
   }
   if (elements.pinnedEmptyText) {
-    elements.pinnedEmptyText.textContent = t("pinnedEmptyHint");
+    const activeEnv = String(state.envFilter || "ALL").trim().toUpperCase();
+    elements.pinnedEmptyText.textContent =
+      activeEnv !== "ALL" ? t("pinnedEmptyEnvHint", activeEnv) : t("pinnedEmptyHint");
   }
 
   if (count === 0) {
@@ -1231,7 +1373,7 @@ function createPinnedCard(link, group, category) {
     category = state.data.categories.find((c) => c.id === group.categoryId) || null;
   }
   const card = document.createElement("div");
-  card.className = "pinned-card";
+  card.className = `pinned-card ${link.hidden === true ? "is-hidden-bookmark" : ""}`.trim();
   card.setAttribute("role", "listitem");
   card.dataset.pinnedLinkId = link.id;
   card.dataset.linkId = link.id;
@@ -1289,6 +1431,11 @@ function createPinnedCard(link, group, category) {
   titleSpan.className = "pinned-title";
   titleSpan.textContent = link.name;
   topRow.appendChild(titleSpan);
+
+  if (link.hidden === true) {
+    topRow.appendChild(createHiddenIndicatorBadge());
+  }
+
   info.appendChild(topRow);
 
   const metaRow = document.createElement("div");
@@ -1408,7 +1555,12 @@ function setupPinnedDragEvents(dragHandle, card, link) {
     e.preventDefault();
     e.stopPropagation();
 
-    const pinnedLinks = getPinnedLinks(state.data);
+    const activeCat = getActiveCategory();
+    const pinnedLinks = getPinnedLinks(state.data, {
+      categoryId: activeCat?.id || null,
+      includeHidden: Boolean(state.showHiddenBookmarks),
+      envFilter: state.envFilter || "ALL"
+    });
     const currentIndex = pinnedLinks.findIndex((l) => l.id === link.id);
     if (currentIndex === -1) return;
 
@@ -1421,7 +1573,7 @@ function setupPinnedDragEvents(dragHandle, card, link) {
     const orderedIds = pinnedLinks.map((l) => l.id);
 
     try {
-      await reorderPinnedLinks(state.data, orderedIds);
+      await reorderPinnedLinks(state.data, orderedIds, activeCat?.id || null);
       announceA11y(t("pinnedMoved", moved.name, currentIndex + 1, targetIndex + 1));
       renderPinnedShelf();
       const newHandle = elements.pinnedGrid?.querySelector(
@@ -1464,7 +1616,12 @@ function setupPinnedCardDropEvents(card, link) {
     card.classList.remove("drop-target-before", "drop-target-after");
     if (!sourceId || sourceId === link.id) return;
 
-    const pinnedLinks = getPinnedLinks(state.data);
+    const activeCat = getActiveCategory();
+    const pinnedLinks = getPinnedLinks(state.data, {
+      categoryId: activeCat?.id || null,
+      includeHidden: Boolean(state.showHiddenBookmarks),
+      envFilter: state.envFilter || "ALL"
+    });
     const sourceIndex = pinnedLinks.findIndex((l) => l.id === sourceId);
     const targetIndex = pinnedLinks.findIndex((l) => l.id === link.id);
     if (sourceIndex === -1 || targetIndex === -1) return;
@@ -1478,7 +1635,7 @@ function setupPinnedCardDropEvents(card, link) {
 
     const orderedIds = pinnedLinks.map((l) => l.id);
     try {
-      await reorderPinnedLinks(state.data, orderedIds);
+      await reorderPinnedLinks(state.data, orderedIds, activeCat?.id || null);
       announceA11y(t("pinnedMoved", moved.name, sourceIndex + 1, insertIndex + 1));
       renderPinnedShelf();
     } catch (err) {
@@ -1488,6 +1645,7 @@ function setupPinnedCardDropEvents(card, link) {
 }
 
 function renderCategoryTabs(maintainActiveFocus = false) {
+  if (!elements.categoryTabs) return;
   const previouslyFocusedId = document.activeElement?.dataset?.categoryId;
   elements.categoryTabs.innerHTML = "";
 
@@ -1509,20 +1667,30 @@ function renderCategoryTabs(maintainActiveFocus = false) {
     }
   });
 
-  elements.addCategoryBtn.style.display = state.isManageMode ? "inline-flex" : "none";
+  if (elements.addCategoryBtn) {
+    elements.addCategoryBtn.style.display = state.isManageMode ? "inline-flex" : "none";
+  }
 }
 
 function renderActiveCategoryHeader() {
   const activeCat = getActiveCategory();
   if (!activeCat) return;
 
-  elements.activeCatTitle.textContent = activeCat.name;
+  if (elements.activeCatTitle) {
+    elements.activeCatTitle.textContent = activeCat.name;
+  }
 
   const currentGroups = state.data.groups.filter((g) => g.categoryId === activeCat.id);
-  elements.catStatsLabel.textContent = `${currentGroups.length} ${currentGroups.length === 1 ? "group" : "groups"}`;
+  if (elements.catStatsLabel) {
+    elements.catStatsLabel.textContent = `${currentGroups.length} ${currentGroups.length === 1 ? "group" : "groups"}`;
+  }
 
-  elements.catAdminButtons.style.display = state.isManageMode ? "inline-flex" : "none";
-  elements.deleteCatBtn.disabled = state.data.categories.length <= 1;
+  if (elements.catAdminButtons) {
+    elements.catAdminButtons.style.display = state.isManageMode ? "inline-flex" : "none";
+  }
+  if (elements.deleteCatBtn) {
+    elements.deleteCatBtn.disabled = state.data.categories.length <= 1;
+  }
 }
 
 async function renderGroups() {
@@ -1546,7 +1714,40 @@ async function renderGroups() {
   if (currentGroups.length === 0) {
     elements.groupGrid.style.display = "none";
     elements.categoryEmptyState.style.display = "block";
+    if (elements.envFilterEmptyState) elements.envFilterEmptyState.style.display = "none";
     return;
+  }
+
+  const activeEnv = String(state.envFilter || "ALL").trim().toUpperCase();
+  const isEnvFiltering = activeEnv !== "ALL";
+
+  if (isEnvFiltering) {
+    const catGroupIds = new Set(currentGroups.map((g) => g.id));
+    const matchingLinksInCat = (state.data.links || []).filter(
+      (l) => l && catGroupIds.has(l.groupId) && isLinkVisibleInCurrentView(l)
+    );
+    if (matchingLinksInCat.length === 0) {
+      elements.groupGrid.style.display = "none";
+      elements.groupGrid.innerHTML = "";
+      elements.categoryEmptyState.style.display = "none";
+      if (elements.envFilterEmptyState) {
+        elements.envFilterEmptyState.style.display = "block";
+        if (elements.envFilterEmptyTitle) {
+          elements.envFilterEmptyTitle.textContent = t("envFilterEmptyTitle", activeEnv);
+        }
+        if (elements.envFilterEmptyDesc) {
+          elements.envFilterEmptyDesc.textContent = t("envFilterEmptyDesc", activeEnv);
+        }
+        if (elements.resetEnvFilterText) {
+          elements.resetEnvFilterText.textContent = t("envFilterResetBtn");
+        }
+      }
+      return;
+    }
+  }
+
+  if (elements.envFilterEmptyState) {
+    elements.envFilterEmptyState.style.display = "none";
   }
 
   elements.groupGrid.style.display = "grid";
@@ -1599,7 +1800,14 @@ async function renderGroups() {
     });
   }
 
-  sortedGroups.forEach((group) => {
+  const groupsToRender =
+    isEnvFiltering && !state.isManageMode
+      ? sortedGroups.filter((g) =>
+          state.data.links.some((l) => l.groupId === g.id && isLinkVisibleInCurrentView(l))
+        )
+      : sortedGroups;
+
+  groupsToRender.forEach((group) => {
     const groupCard = createGroupCard(group);
     elements.groupGrid.appendChild(groupCard);
   });
@@ -1884,7 +2092,9 @@ function createGroupCard(group) {
   const body = document.createElement("div");
   body.className = "group-card-body";
 
-  const groupLinks = state.data.links.filter((l) => l.groupId === group.id);
+  const groupLinks = state.data.links.filter(
+    (l) => l.groupId === group.id && isLinkVisibleInCurrentView(l)
+  );
 
   if (groupLinks.length === 0) {
     const emptyRow = document.createElement("div");
@@ -2059,7 +2269,7 @@ function navigateToBookmark(link, groupId, e) {
 
 function createLinkItem(link, group) {
   const item = document.createElement("li");
-  item.className = "link-item";
+  item.className = `link-item ${link.hidden === true ? "is-hidden-bookmark" : ""}`.trim();
   item.dataset.linkId = link.id;
 
   const isExpanded = state.expandedLinks.get(group.id) === link.id;
@@ -2106,6 +2316,10 @@ function createLinkItem(link, group) {
   textWrap.appendChild(summarySpan);
 
   anchor.appendChild(textWrap);
+
+  if (link.hidden === true) {
+    anchor.appendChild(createHiddenIndicatorBadge());
+  }
 
   // Link open behavior strictly implementing OPEN-LINK-001, DEC-007 & BMK-HIT-001
   anchor.addEventListener("click", (e) => {
@@ -2766,11 +2980,34 @@ function openAddLinkModal(groupId) {
   badgeGroup.appendChild(customBadgeInput);
   container.appendChild(badgeGroup);
 
+  // Private / Hidden Bookmark Field (BMK-PRIV-001)
+  const hiddenGroup = document.createElement("div");
+  hiddenGroup.className = "form-group form-group-checkbox";
+  const hiddenLabelWrap = document.createElement("label");
+  hiddenLabelWrap.className = "form-checkbox-label";
+  hiddenLabelWrap.htmlFor = "newLinkHiddenCheckbox";
+  const hiddenCheckbox = document.createElement("input");
+  hiddenCheckbox.type = "checkbox";
+  hiddenCheckbox.id = "newLinkHiddenCheckbox";
+  hiddenCheckbox.className = "form-checkbox";
+  hiddenCheckbox.checked = false;
+  const hiddenTextSpan = document.createElement("span");
+  hiddenTextSpan.textContent = t("hideBookmarkLabel");
+  hiddenLabelWrap.appendChild(hiddenCheckbox);
+  hiddenLabelWrap.appendChild(hiddenTextSpan);
+  const hiddenHint = document.createElement("span");
+  hiddenHint.className = "form-hint";
+  hiddenHint.textContent = t("hideBookmarkHint");
+  hiddenGroup.appendChild(hiddenLabelWrap);
+  hiddenGroup.appendChild(hiddenHint);
+  container.appendChild(hiddenGroup);
+
   openModal(t("addLink"), container, async () => {
     let hasError = false;
     const nameVal = nameInput.value.trim();
     const urlVal = urlInput.value.trim();
     const badgeVal = customBadgeInput.value.trim();
+    const hiddenVal = Boolean(hiddenCheckbox.checked);
 
     if (!nameVal) {
       nameInput.classList.add("has-error");
@@ -2795,7 +3032,7 @@ function openAddLinkModal(groupId) {
     if (hasError) return false;
 
     try {
-      await addLink(state.data, groupId, { name: nameVal, url: urlVal, badge: badgeVal });
+      await addLink(state.data, groupId, { name: nameVal, url: urlVal, badge: badgeVal, hidden: hiddenVal });
       renderCategoryContent();
       return true;
     } catch (err) {
@@ -2884,11 +3121,34 @@ function openEditLinkModal(link) {
   badgeGroup.appendChild(customBadgeInput);
   container.appendChild(badgeGroup);
 
+  // Private / Hidden Bookmark Field (BMK-PRIV-001)
+  const hiddenGroup = document.createElement("div");
+  hiddenGroup.className = "form-group form-group-checkbox";
+  const hiddenLabelWrap = document.createElement("label");
+  hiddenLabelWrap.className = "form-checkbox-label";
+  hiddenLabelWrap.htmlFor = "editLinkHiddenCheckbox";
+  const hiddenCheckbox = document.createElement("input");
+  hiddenCheckbox.type = "checkbox";
+  hiddenCheckbox.id = "editLinkHiddenCheckbox";
+  hiddenCheckbox.className = "form-checkbox";
+  hiddenCheckbox.checked = Boolean(link.hidden);
+  const hiddenTextSpan = document.createElement("span");
+  hiddenTextSpan.textContent = t("hideBookmarkLabel");
+  hiddenLabelWrap.appendChild(hiddenCheckbox);
+  hiddenLabelWrap.appendChild(hiddenTextSpan);
+  const hiddenHint = document.createElement("span");
+  hiddenHint.className = "form-hint";
+  hiddenHint.textContent = t("hideBookmarkHint");
+  hiddenGroup.appendChild(hiddenLabelWrap);
+  hiddenGroup.appendChild(hiddenHint);
+  container.appendChild(hiddenGroup);
+
   openModal(t("edit"), container, async () => {
     let hasError = false;
     const nameVal = nameInput.value.trim();
     const urlVal = urlInput.value.trim();
     const badgeVal = customBadgeInput.value.trim();
+    const hiddenVal = Boolean(hiddenCheckbox.checked);
 
     if (!nameVal) {
       nameInput.classList.add("has-error");
@@ -2913,7 +3173,12 @@ function openEditLinkModal(link) {
     if (hasError) return false;
 
     try {
-      await editLink(state.data, link.id, { name: nameVal, url: urlVal, badge: badgeVal }, link.revision);
+      await editLink(
+        state.data,
+        link.id,
+        { name: nameVal, url: urlVal, badge: badgeVal, hidden: hiddenVal },
+        link.revision
+      );
       renderCategoryContent();
       return true;
     } catch (err) {
@@ -3029,7 +3294,8 @@ async function refreshSearchResults() {
 
   const searchOut = searchBookmarks(state.data, state.searchQuery, {
     linkMetricsMap,
-    groupMetricsMap
+    groupMetricsMap,
+    includeHidden: Boolean(state.showHiddenBookmarks)
   });
 
   state.searchResults = searchOut.results;
@@ -3103,7 +3369,7 @@ function renderSearchResultsDOM(searchOut) {
 
     const option = document.createElement("div");
     option.id = optionId;
-    option.className = `search-result-option ${isSelected ? "is-active" : ""}`;
+    option.className = `search-result-option ${isSelected ? "is-active" : ""} ${item.link.hidden === true ? "is-hidden-bookmark" : ""}`.trim();
     option.setAttribute("role", "option");
     option.setAttribute("aria-selected", isSelected ? "true" : "false");
     option.dataset.index = String(index);
@@ -3137,6 +3403,10 @@ function renderSearchResultsDOM(searchOut) {
       pinTag.className = "search-result-pin-tag";
       pinTag.textContent = t("searchSectionPinned");
       titleRow.appendChild(pinTag);
+    }
+
+    if (item.link.hidden === true) {
+      titleRow.appendChild(createHiddenIndicatorBadge());
     }
 
     textCol.appendChild(titleRow);
@@ -3339,9 +3609,12 @@ function handleGlobalSearchKeydown(e) {
   }
 
   const activeEl = typeof document !== "undefined" ? document.activeElement : null;
+  const hasOpenPopover = elements.bgPopoverContainer?.style?.display === "block";
+  const hasBlockingModal = Boolean(state.activeModal || hasOpenPopover);
+
   const decision = evaluateSearchShortcut(e, {
     activeElement: activeEl,
-    hasBlockingModal: Boolean(state.activeModal)
+    hasBlockingModal
   });
 
   if (decision.shouldOpen) {
@@ -3349,6 +3622,20 @@ function handleGlobalSearchKeydown(e) {
       e.preventDefault();
     }
     openSearchModal("", activeEl);
+    return;
+  }
+
+  const envDecision = evaluateEnvFilterShortcut(e, {
+    activeElement: activeEl,
+    hasBlockingModal,
+    isSearchOpen: Boolean(state.isSearchOpen)
+  });
+
+  if (envDecision.shouldCycle) {
+    if (envDecision.preventDefault && typeof e.preventDefault === "function") {
+      e.preventDefault();
+    }
+    cycleEnvFilter();
   }
 }
 
@@ -3381,6 +3668,16 @@ export {
   createLinkItem,
   createPinnedCard,
   renderPinnedShelf,
+  renderGroups,
+  renderCategoryContent,
+  switchCategory,
+  cycleEnvFilter,
+  setEnvFilter,
+  setShowHiddenBookmarks,
+  toggleHiddenBookmarksVisibility,
+  isLinkVisibleInCurrentView,
+  openAddLinkModal,
+  openEditLinkModal,
   updateGroupLinksExpandState,
   openSearchModal,
   closeSearchModal,

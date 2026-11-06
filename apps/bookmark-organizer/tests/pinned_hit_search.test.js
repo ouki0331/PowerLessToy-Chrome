@@ -345,8 +345,24 @@ function setupTestDomElements() {
     "groupGrid",
     "categoryEmptyState",
     "activeCatTitle",
+    "catStatsLabel",
+    "catAdminButtons",
+    "deleteCatBtn",
+    "addCategoryBtn",
     "categoryTabs",
-    "modalContainer"
+    "modalContainer",
+    "errorBanner",
+    "errorDesc",
+    "envFilterBtn",
+    "envFilterBtnText",
+    "envFilterDot",
+    "envFilterEmptyState",
+    "envFilterEmptyTitle",
+    "envFilterEmptyDesc",
+    "resetEnvFilterBtn",
+    "resetEnvFilterText",
+    "privacyToggleBtn",
+    "privacyToggleIcon"
   ];
   for (const id of ids) {
     const el = new MockElement("div");
@@ -381,6 +397,10 @@ const { STORAGE_KEY } = await import("../src/newtab/constants.js");
 
 const {
   MATCH_TIERS,
+  ENV_FILTER_ORDER,
+  getNextEnvFilter,
+  matchesEnvFilter,
+  evaluateEnvFilterShortcut,
   searchBookmarks,
   getHighlightSegments,
   appendHighlightedText,
@@ -398,12 +418,25 @@ const { migrateFromChromeStorageIfNeeded } = await import("../src/newtab/migrati
 
 const {
   state,
+  createGroupCard,
   createLinkItem,
   createPinnedCard,
   renderPinnedShelf,
+  renderGroups,
+  renderCategoryContent,
+  switchCategory,
+  cycleEnvFilter,
+  setEnvFilter,
+  setShowHiddenBookmarks,
+  toggleHiddenBookmarksVisibility,
+  openAddLinkModal,
+  openEditLinkModal,
   openSearchModal,
+  closeSearchModal,
+  refreshSearchResults,
   handleSearchDialogKeydown,
-  handleGlobalSearchKeydown
+  handleGlobalSearchKeydown,
+  initWorkbench
 } = await import("../src/newtab/app.js");
 
 // ===========================================================================
@@ -447,15 +480,17 @@ describe("BMK-PIN-001: Global Pinned Bookmarks Shelf", () => {
     assert.equal(data.links.find((l) => l.id === l1.id).groupId, g1.id);
     assert.equal(data.links.find((l) => l.id === l2.id).groupId, g2.id);
 
-    // Pinned Shelf is globally visible across category switches
+    // Pinned Shelf is scoped per Tab (BMK-PIN-002)
     state.data = data;
+    state.envFilter = "ALL";
+    state.showHiddenBookmarks = false;
     state.activeCategoryId = cat1.id;
     renderPinnedShelf();
-    assert.equal(elementsById.get("pinnedShelfCount").textContent, "2");
+    assert.equal(elementsById.get("pinnedShelfCount").textContent, "1");
 
     state.activeCategoryId = cat2.id;
     renderPinnedShelf();
-    assert.equal(elementsById.get("pinnedShelfCount").textContent, "2");
+    assert.equal(elementsById.get("pinnedShelfCount").textContent, "1");
 
     // Unpin l1
     const unpinned1 = await unpinLink(data, l1.id, pinned1Again.revision);
@@ -1123,3 +1158,413 @@ describe("Backup & Import Pinned Rules (BMK-PIN-001 Rules 10 & 11)", () => {
     assert.equal(Boolean(importedLink.pinned), false);
   });
 });
+
+// ===========================================================================
+// 7. BMK-ENV-001: Cycle Filtering by Environment Badge
+// ===========================================================================
+describe("BMK-ENV-001: Cycle Filtering by Environment Badge", () => {
+  beforeEach(() => {
+    _resetMemoryStore();
+    setupTestDomElements();
+    state.isManageMode = false;
+    state.activeModal = null;
+    state.isSearchOpen = false;
+    state.envFilter = "ALL";
+    state.showHiddenBookmarks = false;
+  });
+
+  it("cycles strictly in order ALL -> LOCAL -> DEV -> TEST -> PROD -> ALL via E key and status button", async () => {
+    const data = await loadWorkbenchData();
+    state.data = data;
+    setEnvFilter("ALL");
+
+    assert.deepEqual(ENV_FILTER_ORDER, ["ALL", "LOCAL", "DEV", "TEST", "PROD"]);
+    assert.equal(state.envFilter, "ALL");
+    assert.equal(elementsById.get("envFilterBtnText").textContent, "Env: All");
+    assert.equal(elementsById.get("envFilterBtn").getAttribute("aria-pressed"), "false");
+
+    // Press 'e' key on page body
+    const bodyEl = new MockElement("BODY");
+    global.document.activeElement = bodyEl;
+
+    const expectedSequence = ["LOCAL", "DEV", "TEST", "PROD", "ALL"];
+    for (const expected of expectedSequence) {
+      let prevented = false;
+      handleGlobalSearchKeydown({
+        key: "e",
+        target: bodyEl,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        preventDefault() {
+          prevented = true;
+        }
+      });
+      assert.equal(prevented, true);
+      assert.equal(state.envFilter, expected);
+      assert.equal(elementsById.get("envFilterBtn").dataset.envFilter, expected);
+      assert.equal(
+        elementsById.get("envFilterBtn").getAttribute("aria-pressed"),
+        expected === "ALL" ? "false" : "true"
+      );
+    }
+
+    // Also cycles via direct click / cycleEnvFilter()
+    assert.equal(cycleEnvFilter(), "LOCAL");
+    assert.equal(cycleEnvFilter(), "DEV");
+    assert.equal(cycleEnvFilter(), "TEST");
+    assert.equal(cycleEnvFilter(), "PROD");
+    assert.equal(cycleEnvFilter(), "ALL");
+  });
+
+  it("does NOT trigger E shortcut when focus is inside search input, form inputs, textareas, or open modals", async () => {
+    const data = await loadWorkbenchData();
+    state.data = data;
+    setEnvFilter("ALL");
+
+    const textInput = new MockElement("INPUT");
+    const textarea = new MockElement("TEXTAREA");
+    const selectEl = new MockElement("SELECT");
+    const editableDiv = new MockElement("DIV");
+    editableDiv.isContentEditable = true;
+    const searchInput = elementsById.get("searchInput");
+
+    for (const control of [textInput, textarea, selectEl, editableDiv, searchInput]) {
+      global.document.activeElement = control;
+      handleGlobalSearchKeydown({
+        key: "e",
+        target: control,
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false
+      });
+      assert.equal(state.envFilter, "ALL", `Focus inside ${control.tagName} must not trigger E filter`);
+    }
+
+    // When modal or search is open, pressing E on body must also not cycle
+    const bodyEl = new MockElement("BODY");
+    global.document.activeElement = bodyEl;
+    state.activeModal = new MockElement("DIV");
+    handleGlobalSearchKeydown({ key: "E", target: bodyEl });
+    assert.equal(state.envFilter, "ALL", "Open modal must block E shortcut");
+
+    state.activeModal = null;
+    state.isSearchOpen = true;
+    handleGlobalSearchKeydown({ key: "e", target: bodyEl });
+    assert.equal(state.envFilter, "ALL", "Open search dialog must block E shortcut");
+
+    // Ctrl+E / Cmd+E / Alt+E must not cycle
+    state.isSearchOpen = false;
+    const modCheck = evaluateEnvFilterShortcut(
+      { key: "e", ctrlKey: true, target: bodyEl },
+      { activeElement: bodyEl }
+    );
+    assert.equal(modCheck.shouldCycle, false);
+  });
+
+  it("shows unbadged and custom-badged links ONLY in ALL state, matches standard badges case-insensitively, preserves filter across Tabs, and shows lightweight empty state with reset action", async () => {
+    const data = await loadWorkbenchData();
+    const cat1 = data.categories[0];
+    const cat2 = data.categories[1];
+    const g1 = await addGroup(data, cat1.id, "Payment Service");
+    const g2 = await addGroup(data, cat2.id, "Internal Docs");
+
+    const lLocal = await addLink(data, g1.id, { name: "Local Dev Server", url: "http://localhost:3000", badge: "local" });
+    const lDev = await addLink(data, g1.id, { name: "Dev Portal", url: "https://dev.pay.example.com", badge: "DEV" });
+    const lCustom = await addLink(data, g1.id, { name: "Architecture Wiki", url: "https://wiki.pay.example.com", badge: "DOCS" });
+    const lNoBadge = await addLink(data, g1.id, { name: "Team Calendar", url: "https://cal.pay.example.com", badge: "" });
+    await addLink(data, g2.id, { name: "Staging Env", url: "https://test.docs.example.com", badge: "test" });
+
+    await pinLink(data, lLocal.id);
+    await pinLink(data, lDev.id);
+
+    state.data = data;
+    state.activeCategoryId = cat1.id;
+
+    // 1. In ALL state: all 4 links in g1 are shown, and both pinned links in cat1 are shown
+    setEnvFilter("ALL");
+    await renderCategoryContent();
+    let card1 = createGroupCard(g1);
+    assert.equal(card1.querySelectorAll(".link-item").length, 4);
+    assert.equal(elementsById.get("pinnedShelfCount").textContent, "2");
+
+    // 2. Cycle to LOCAL: case-insensitive match ("local" matches "LOCAL"), custom & unbadged excluded
+    setEnvFilter("LOCAL");
+    await renderCategoryContent();
+    card1 = createGroupCard(g1);
+    const localItems = card1.querySelectorAll(".link-item");
+    assert.equal(localItems.length, 1);
+    assert.equal(localItems[0].querySelector(".link-name").textContent, "Local Dev Server");
+    assert.equal(elementsById.get("pinnedShelfCount").textContent, "1");
+
+    // 3. Cycle to TEST in cat1 (which has no TEST links): shows lightweight empty state without deleting data
+    setEnvFilter("TEST");
+    await renderCategoryContent();
+    assert.equal(elementsById.get("groupGrid").style.display, "none");
+    assert.equal(elementsById.get("envFilterEmptyState").style.display, "block");
+    assert.equal(data.links.length, 5, "Filtering must never delete or mutate underlying bookmark data");
+
+    // 4. Switch to cat2: active filter TEST is preserved and matches cat2's "test" link
+    await switchCategory(cat2.id);
+    assert.equal(state.envFilter, "TEST");
+    assert.equal(elementsById.get("envFilterEmptyState").style.display, "none");
+    assert.equal(elementsById.get("groupGrid").style.display, "grid");
+    const card2 = createGroupCard(g2);
+    assert.equal(card2.querySelectorAll(".link-item").length, 1);
+
+    // 5. Reset back to ALL
+    setEnvFilter("ALL");
+    await switchCategory(cat1.id);
+    assert.equal(elementsById.get("envFilterEmptyState").style.display, "none");
+    assert.equal(createGroupCard(g1).querySelectorAll(".link-item").length, 4);
+  });
+});
+
+// ===========================================================================
+// 8. BMK-PIN-002: Tab-Scoped Pinned Bookmarks Isolation
+// ===========================================================================
+describe("BMK-PIN-002: Tab-Scoped Pinned Bookmarks Shelf", () => {
+  beforeEach(() => {
+    _resetMemoryStore();
+    setupTestDomElements();
+    state.isManageMode = false;
+    state.envFilter = "ALL";
+    state.showHiddenBookmarks = false;
+  });
+
+  it("isolates pinned bookmarks per Tab and keeps pinned ordering independent across Tabs", async () => {
+    const data = await loadWorkbenchData();
+    const catWork = data.categories[0];
+    const catCompany = data.categories[1];
+    const catPersonal = data.categories[2];
+
+    const gWork = await addGroup(data, catWork.id, "Core API");
+    const gCompany = await addGroup(data, catCompany.id, "HR & Finance");
+
+    const w1 = await addLink(data, gWork.id, { name: "Work Alpha", url: "https://alpha.work.example.com", badge: "DEV" });
+    const w2 = await addLink(data, gWork.id, { name: "Work Beta", url: "https://beta.work.example.com", badge: "PROD" });
+    const c1 = await addLink(data, gCompany.id, { name: "Payroll Portal", url: "https://payroll.company.example.com", badge: "PROD" });
+    const c2 = await addLink(data, gCompany.id, { name: "Benefits Hub", url: "https://benefits.company.example.com", badge: "LOCAL" });
+
+    await pinLink(data, w1.id);
+    await pinLink(data, w2.id);
+    await pinLink(data, c1.id);
+    await pinLink(data, c2.id);
+
+    state.data = data;
+
+    // 1. Work Tab only shows Work pinned links
+    await switchCategory(catWork.id);
+    assert.deepEqual(
+      getPinnedLinks(data, { categoryId: catWork.id }).map((l) => l.name),
+      ["Work Alpha", "Work Beta"]
+    );
+    assert.equal(elementsById.get("pinnedShelfCount").textContent, "2");
+
+    // 2. Company Tab only shows Company pinned links
+    await switchCategory(catCompany.id);
+    assert.deepEqual(
+      getPinnedLinks(data, { categoryId: catCompany.id }).map((l) => l.name),
+      ["Payroll Portal", "Benefits Hub"]
+    );
+    assert.equal(elementsById.get("pinnedShelfCount").textContent, "2");
+
+    // 3. Personal Tab has 0 pinned links -> shows empty state
+    await switchCategory(catPersonal.id);
+    assert.equal(getPinnedLinks(data, { categoryId: catPersonal.id }).length, 0);
+    assert.equal(elementsById.get("pinnedShelfCount").textContent, "0");
+    assert.equal(elementsById.get("pinnedEmptyState").style.display, "block");
+
+    // 4. Reordering pinned links in Work Tab does NOT alter Company Tab order or revisions
+    const companyBefore = getPinnedLinks(data, { categoryId: catCompany.id }).map((l) => ({
+      id: l.id,
+      pinnedOrder: l.pinnedOrder,
+      revision: l.revision
+    }));
+
+    await reorderPinnedLinks(data, [w2.id, w1.id], catWork.id);
+
+    assert.deepEqual(
+      getPinnedLinks(data, { categoryId: catWork.id }).map((l) => l.name),
+      ["Work Beta", "Work Alpha"]
+    );
+
+    const companyAfter = getPinnedLinks(data, { categoryId: catCompany.id }).map((l) => ({
+      id: l.id,
+      pinnedOrder: l.pinnedOrder,
+      revision: l.revision
+    }));
+    assert.deepEqual(
+      companyAfter,
+      companyBefore,
+      "Reordering pinned links in Tab A must not touch pinnedOrder or revision in Tab B"
+    );
+  });
+});
+
+// ===========================================================================
+// 9. BMK-PRIV-001: Private / Hidden Bookmarks UI Toggle
+// ===========================================================================
+describe("BMK-PRIV-001: Hide Selected Bookmarks (UI Privacy Toggle)", () => {
+  beforeEach(() => {
+    _resetMemoryStore();
+    setupTestDomElements();
+    state.isManageMode = false;
+    state.envFilter = "ALL";
+    state.showHiddenBookmarks = false;
+  });
+
+  it("hides private bookmarks by default from lists, Pinned Shelf, Search, and Environment Filter, reveals on unlock with indicator, and resets on reload", async () => {
+    const data = await loadWorkbenchData();
+    const cat1 = data.categories[0];
+    const cat2 = data.categories[1];
+    const g1 = await addGroup(data, cat1.id, "Admin Portals");
+    const g2 = await addGroup(data, cat2.id, "Personal Vault");
+
+    const publicLink = await addLink(data, g1.id, {
+      name: "Public Status Page",
+      url: "https://status.example.com",
+      badge: "PROD",
+      hidden: false
+    });
+    const secretLink = await addLink(data, g1.id, {
+      name: "Root Console Secret",
+      url: "https://root.secret.example.com",
+      badge: "PROD",
+      hidden: true
+    });
+    const secretOtherTab = await addLink(data, g2.id, {
+      name: "Private Tax Portal",
+      url: "https://tax.secret.example.com",
+      badge: "LOCAL",
+      hidden: true
+    });
+
+    // Pin both public and secret links in cat1
+    await pinLink(data, publicLink.id);
+    await pinLink(data, secretLink.id);
+
+    state.data = data;
+    state.activeCategoryId = cat1.id;
+
+    // 1. Default state is hidden (showHiddenBookmarks === false)
+    assert.equal(state.showHiddenBookmarks, false);
+    await renderCategoryContent();
+
+    // Not in ordinary group list
+    let card = createGroupCard(g1);
+    assert.equal(card.querySelectorAll(".link-item").length, 1);
+    assert.equal(card.querySelector(".link-name").textContent, "Public Status Page");
+
+    // Not in Pinned Shelf
+    assert.equal(elementsById.get("pinnedShelfCount").textContent, "1");
+    assert.deepEqual(
+      getPinnedLinks(data, { categoryId: cat1.id, includeHidden: state.showHiddenBookmarks }).map((l) => l.id),
+      [publicLink.id]
+    );
+
+    // Not in Centralized Search (neither keyword search nor empty-query recommendations)
+    assert.equal(
+      searchBookmarks(data, "secret", { includeHidden: state.showHiddenBookmarks }).results.length,
+      0
+    );
+    assert.equal(
+      searchBookmarks(data, "", { includeHidden: state.showHiddenBookmarks }).results.some((r) => r.link.hidden),
+      false
+    );
+
+    // 2. Environment filter CANNOT bypass hidden rule even when badge matches PROD or LOCAL
+    setEnvFilter("PROD");
+    card = createGroupCard(g1);
+    assert.equal(card.querySelectorAll(".link-item").length, 1);
+    assert.equal(card.querySelector(".link-name").textContent, "Public Status Page");
+
+    await switchCategory(cat2.id);
+    setEnvFilter("LOCAL");
+    assert.equal(elementsById.get("envFilterEmptyState").style.display, "block", "Hidden LOCAL link must remain hidden under LOCAL filter");
+
+    // 3. Click lock button (toggleHiddenBookmarksVisibility) to temporarily reveal
+    setEnvFilter("ALL");
+    await switchCategory(cat1.id);
+    toggleHiddenBookmarksVisibility();
+    assert.equal(state.showHiddenBookmarks, true);
+    assert.equal(elementsById.get("privacyToggleBtn").getAttribute("aria-pressed"), "true");
+
+    card = createGroupCard(g1);
+    const items = card.querySelectorAll(".link-item");
+    assert.equal(items.length, 2, "Hidden bookmark returns to its original Tab and Group when unlocked");
+    const secretItem = items.find((el) => el.dataset.linkId === secretLink.id);
+    assert.ok(secretItem.classList.contains("is-hidden-bookmark"));
+    assert.ok(secretItem.querySelector(".link-hidden-indicator"), "Revealed hidden bookmark must show subtle hidden indicator");
+
+    // Appears in current Tab's Pinned Shelf when unlocked
+    renderPinnedShelf();
+    assert.equal(elementsById.get("pinnedShelfCount").textContent, "2");
+    const pinnedCard = createPinnedCard(secretLink, g1, cat1);
+    assert.ok(pinnedCard.classList.contains("is-hidden-bookmark"));
+    assert.ok(pinnedCard.querySelector(".link-hidden-indicator"));
+
+    // Appears in cross-Tab Centralized Search when unlocked
+    const unlockedSearch = searchBookmarks(data, "secret", { includeHidden: state.showHiddenBookmarks }).results;
+    assert.equal(unlockedSearch.length, 2);
+    assert.ok(unlockedSearch.some((r) => r.link.id === secretOtherTab.id));
+
+    // 4. Can toggle back to hidden via editLink or lock button, and page refresh (initWorkbench) resets to hidden
+    await initWorkbench();
+    assert.equal(state.showHiddenBookmarks, false, "Page reload / initWorkbench must reset showHiddenBookmarks to false");
+    assert.equal(elementsById.get("privacyToggleBtn").getAttribute("aria-pressed"), "false");
+
+    // 5. Can unset hidden flag via editLink
+    const latestSecret = state.data.links.find((l) => l.id === secretLink.id);
+    const unhidden = await editLink(
+      state.data,
+      secretLink.id,
+      { name: latestSecret.name, url: latestSecret.url, badge: latestSecret.badge, hidden: false },
+      latestSecret.revision
+    );
+    assert.equal(unhidden.hidden, false);
+    assert.equal(createGroupCard(g1).querySelectorAll(".link-item").length, 2);
+
+    // 6. Edit Link Modal renders #editLinkHiddenCheckbox and persists hidden toggle
+    openEditLinkModal(unhidden);
+    const modalContainer = elementsById.get("modalContainer");
+    const editHiddenCheckbox = modalContainer.querySelector("#editLinkHiddenCheckbox");
+    assert.ok(editHiddenCheckbox, "Edit Link Modal must render #editLinkHiddenCheckbox");
+    assert.equal(editHiddenCheckbox.checked, false);
+
+    // 7. Full backup export & restore preserves hidden flag
+    await editLink(
+      state.data,
+      secretLink.id,
+      { name: unhidden.name, url: unhidden.url, badge: unhidden.badge, hidden: true },
+      unhidden.revision
+    );
+    const backup = await exportBackup();
+    assert.equal(validateImportJson(backup).valid, true);
+    const exportedSecret = backup.links.find((l) => l.name === "Root Console Secret");
+    assert.equal(exportedSecret.hidden, true);
+  });
+
+  it("enforces 48-52px vertical row height for ordinary bookmarks while preserving 4-column responsive grid layout (BMK-HIT-001)", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const cssPath = path.resolve(process.cwd(), "apps/bookmark-organizer/src/newtab/style.css");
+    const cssText = await fs.readFile(cssPath, "utf8");
+
+    // Verify 4-column responsive grid is intact
+    assert.match(cssText, /grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(320px,\s*1fr\)\)/);
+
+    // Verify .link-row has min-height within 48-52px and no legacy 32px min-height on .link-row
+    const linkRowBlocks = [...cssText.matchAll(/\.link-row\s*\{([^}]*)\}/g)].map((m) => m[1]);
+    assert.ok(linkRowBlocks.length >= 1);
+    for (const block of linkRowBlocks) {
+      const mh = block.match(/min-height:\s*(\d+)px/);
+      if (mh) {
+        const px = Number(mh[1]);
+        assert.ok(px >= 48 && px <= 52, `Expected .link-row min-height between 48px and 52px, got ${px}px`);
+      }
+    }
+  });
+});
+
+

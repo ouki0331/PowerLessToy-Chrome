@@ -807,7 +807,7 @@ body {
 .link-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   list-style: none;
 }
 
@@ -830,10 +830,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 8px;
+  padding: 7px 10px 7px 12px;
   width: 100%;
-  gap: 8px;
-  min-height: 32px;
+  gap: 10px;
+  min-height: 50px;
 }
 
 .link-anchor {
@@ -857,15 +857,16 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 13.5px;
+  line-height: 1.3;
   color: var(--text-main);
   letter-spacing: -0.005em;
 }
 
 .link-badge {
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 600;
-  padding: 1.5px 6px;
+  padding: 2px 6.5px;
   border-radius: var(--radius-xs);
   white-space: nowrap;
   letter-spacing: 0.02em;
@@ -2413,8 +2414,8 @@ body.has-custom-bg .pinned-shelf-header {
    Feature 2: Expanded Bookmark Click Area (BMK-HIT-001)
    ========================================================================== */
 .link-row {
-  min-height: 48px;
-  padding: 5px 8px 5px 10px;
+  min-height: 50px;
+  padding: 7px 10px 7px 12px;
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: background-color 0.12s ease, box-shadow 0.12s ease;
@@ -2448,10 +2449,10 @@ body.has-custom-bg .pinned-shelf-header {
 
 .link-anchor {
   align-self: stretch;
-  padding: 4px 2px;
+  padding: 3px 2px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   flex: 1;
   min-width: 0;
 }
@@ -2464,18 +2465,18 @@ body.has-custom-bg .pinned-shelf-header {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 1px;
+  gap: 2.5px;
   min-width: 0;
   flex: 1;
 }
 
 .link-url-summary {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.25;
+  line-height: 1.3;
 }
 
 /* Independent action buttons: strictly >= 32x32px hit area */
@@ -2822,5 +2823,158 @@ mark.search-highlight {
   height: 22px;
   padding: 1px 6px;
 }
+
+/* ==========================================================================
+   Environment Filter Cycling & Private Bookmarks (BMK-ENV-001 & BMK-PRIV-001)
+   ========================================================================== */
+.env-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.env-filter-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.env-filter-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+
+.env-filter-btn.is-active {
+  border-width: 1.5px;
+  border-color: var(--primary);
+  color: var(--text-main);
+  font-weight: 600;
+  box-shadow: 0 0 0 2px var(--primary-subtle);
+}
+
+.env-filter-btn.is-active .env-filter-dot {
+  opacity: 1;
+  background: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-subtle);
+}
+
+.env-filter-btn[data-env-filter="LOCAL"].is-active .env-filter-dot {
+  background: var(--badge-local-text);
+}
+
+.env-filter-btn[data-env-filter="DEV"].is-active .env-filter-dot {
+  background: var(--badge-dev-text);
+}
+
+.env-filter-btn[data-env-filter="TEST"].is-active .env-filter-dot {
+  background: var(--badge-test-text);
+}
+
+.env-filter-btn[data-env-filter="PROD"].is-active .env-filter-dot {
+  background: var(--badge-prod-text);
+}
+
+.env-filter-kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.privacy-toggle-btn {
+  min-width: 30px;
+  min-height: 30px;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+}
+
+.privacy-toggle-btn .ui-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.privacy-toggle-btn.is-unlocked {
+  color: var(--primary);
+  background: var(--primary-subtle);
+  border-color: var(--primary);
+}
+
+.link-hidden-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-subtle);
+  border: 1px dashed var(--border-strong);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.link-hidden-indicator-icon .ui-icon {
+  width: 10px;
+  height: 10px;
+}
+
+.is-hidden-bookmark {
+  border-style: dashed;
+  border-color: var(--border-subtle);
+}
+
+.form-group-checkbox {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.form-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-main);
+  cursor: pointer;
+  user-select: none;
+}
+
+.form-checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.form-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.env-empty-state {
+  padding: 36px 20px;
+}
+
 
 

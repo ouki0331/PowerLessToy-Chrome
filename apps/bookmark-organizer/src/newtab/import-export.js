@@ -215,6 +215,9 @@ export function validateImportJson(rawJson) {
     if (lnk.pinnedOrder !== undefined && lnk.pinnedOrder !== null && typeof lnk.pinnedOrder !== "number") {
       errors.push(`${path}.pinnedOrder: must be a number when present`);
     }
+    if (lnk.hidden !== undefined && typeof lnk.hidden !== "boolean") {
+      errors.push(`${path}.hidden: must be a boolean when present`);
+    }
     if (!isNonEmptyString(lnk.groupId)) {
       errors.push(`${path}.groupId: required non-empty string`);
     } else if (!groupIds.has(lnk.groupId)) {
@@ -364,6 +367,7 @@ export function planImport(parsed, current, conflictResolutions = {}, options = 
       name: inLnk.name.trim(),
       url: inLnk.url.trim(),
       badge: (inLnk.badge || "").trim(),
+      ...(inLnk.hidden === true ? { hidden: true } : {}),
       ...(shouldPin ? { pinned: true, pinnedOrder: assignedPinnedOrder } : {})
     };
     const match = linkByKey.get(key);
@@ -941,6 +945,7 @@ export function generateBackupJson({ categories, groups, links }) {
       name: l.name,
       url: l.url,
       badge: l.badge || "",
+      ...(l.hidden === true ? { hidden: true } : {}),
       ...(l.pinned === true
         ? {
             pinned: true,

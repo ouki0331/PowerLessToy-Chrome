@@ -73,6 +73,37 @@ Visual Enhancements & Firefox Specification: [`docs/product/bookmark-organizer-e
   - **Offline & Failure Resilience**: Embedded curated offline seed pool; API timeouts, offline state, or broken images safely preserve current image or fallback to clean theme solid background without modal interruptions.
   - **Strict Bookmark Data Isolation**: Background configuration, favorites, and local image blobs are completely isolated in separate stores and NEVER touch bookmark IndexedDB stores, JSON backup exports, pre-import snapshots, or undo routines.
 - **Bilingual Support**: Pure English and Japanese UI strings (zero Chinese in production code).
+- **Expanded Ordinary Bookmark Row Hit Target (`BMK-HIT-001`)**:
+  - 48–52px vertical row height (`min-height: 50px`) with comfortable vertical breathing room while preserving the 4-column responsive desktop layout.
+  - Full row primary area navigates on click; Pin, Expand, Edit, and Delete buttons remain isolated (`>= 32x32px`) and never trigger navigation.
+- **Environment Badge Filter Cycling (`BMK-ENV-001`)**:
+  - Cycle filter across `ALL → LOCAL → DEV → TEST → PROD → ALL` via the `E` keyboard shortcut (disabled inside inputs/modals/search) or the toolbar status button (`#envFilterBtn`).
+  - Filters both ordinary bookmarks and pinned bookmarks in the current Tab case-insensitively without mutating underlying data.
+  - Unbadged and custom-badged links appear only in `ALL`; displays a lightweight empty state with a 1-click reset button when no links match in the active Tab.
+- **UI-Level Private / Hidden Bookmarks (`BMK-PRIV-001`)**:
+  - Mark or unmark any bookmark as hidden (`hidden: true`) in the Add/Edit Link dialog.
+  - Hidden by default on page load and refresh: excluded from ordinary group lists, Pinned Shelf, Centralized Spotlight Search, and environment filter results.
+  - Lock button (`#privacyToggleBtn`) temporarily reveals hidden bookmarks in their original Tab/Group, Pinned Shelf, and Search with a subtle `Hidden` indicator badge; note that this is UI-level hiding only, not cryptographic encryption.
+- **Tab-Scoped Pinned Bookmarks (`BMK-PIN-002`)**:
+  - Pinned Shelf is isolated per Tab (Category) so each Tab displays and reorders only its own pinned bookmarks without affecting other Tabs.
+- **Centralized Spotlight Search (`BMK-SEARCH-001`)**:
+  - Cross-Tab search (`Ctrl/Cmd+K`, `/`, or extension command `Ctrl/Cmd+Shift+K`) with 6-tier ranking and Pinned priority while respecting hidden bookmark state.
+
+## Release, Versioning & Git Tag Rules
+
+Every completed, test-verified, deliverable batch of changes for `apps/bookmark-organizer` **MUST** follow these mandatory release steps:
+
+1. **Semantic Versioning (`manifest.json` & `package.json`)**:
+   - Bug fixes increment **patch** (`0.2.x`).
+   - Backward-compatible new features increment **minor** (`0.x.0`).
+   - Incompatible breaking changes increment **major** (`x.0.0`).
+2. **Commit & Push**:
+   - Verify `git status` and `git diff` contain zero `test-data/`, temporary files, personal bookmark data, or out-of-scope changes.
+   - Create an explicit Git commit and push to `origin/main`.
+3. **Annotated Git Tag**:
+   - Create an annotated tag named `bookmark-organizer-vX.Y.Z` (e.g., `bookmark-organizer-v0.2.0`) summarizing the user-visible changes.
+   - Push the tag to `origin` (`git push origin bookmark-organizer-vX.Y.Z`).
+   - Never tag incomplete, unverified, or debug-only commits.
 
 ## Storage Architecture
 

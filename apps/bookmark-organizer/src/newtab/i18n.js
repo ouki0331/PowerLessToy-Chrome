@@ -195,7 +195,28 @@ const translations = {
     searchEmptyWorkspace: "No bookmarks yet. Add links to your groups to search them here.",
     searchFooterNavHint: "↑↓ Select · Enter Open · Ctrl/⌘+Enter New Tab · Esc Close",
     searchShortcutSettingsBtn: "Configure Shortcuts",
-    searchShortcutNotice: "Tip: Use / on this page if your browser reserves Ctrl/⌘+K, or customize in Extension Shortcuts."
+    searchShortcutNotice: "Tip: Use / on this page if your browser reserves Ctrl/⌘+K, or customize in Extension Shortcuts.",
+
+    // Environment Filter Cycling (BMK-ENV-001)
+    envFilterPrefix: "Env",
+    envFilterAll: "All",
+    envFilterBtnText: (env) => `Env: ${env === "ALL" ? "All" : env}`,
+    envFilterBtnTitle: (env) => `Filter by environment (${env === "ALL" ? "All" : env}). Click or press E to cycle.`,
+    envFilterEmptyTitle: (env) => `No ${env} bookmarks in this tab`,
+    envFilterEmptyDesc: (env) => `No links in the current category have the "${env}" environment badge. Your bookmarks are safe.`,
+    envFilterResetBtn: "Show All Environments",
+
+    // Private / Hidden Bookmarks UI Toggle (BMK-PRIV-001)
+    hideBookmarkLabel: "Hide bookmark",
+    hideBookmarkHint: "UI-level hiding only (hidden by default until unlocked with the lock button; not encrypted).",
+    hiddenBookmarkBadge: "Hidden",
+    showHiddenBtn: "Hidden: Locked",
+    hideHiddenBtn: "Hidden: Visible",
+    showHiddenTitle: "Temporarily reveal hidden bookmarks",
+    hideHiddenTitle: "Hide private bookmarks again",
+
+    // Scoped Pinned Shelf (BMK-PIN-002)
+    pinnedEmptyEnvHint: (env) => `No pinned bookmarks in this tab match "${env}".`
   },
   ja: {
     appTitle: "Bookmark Organizer",
@@ -388,7 +409,28 @@ const translations = {
     searchEmptyWorkspace: "ブックマークがまだありません。",
     searchFooterNavHint: "↑↓ 移動 · Enter 開く · Ctrl/⌘+Enter 新規タブ · Esc 閉じる",
     searchShortcutSettingsBtn: "ショートカット設定",
-    searchShortcutNotice: "ヒント: ブラウザが Ctrl/⌘+K を予約している場合は / キーまたは拡張機能ショートカット設定をご利用ください。"
+    searchShortcutNotice: "ヒント: ブラウザが Ctrl/⌘+K を予約している場合は / キーまたは拡張機能ショートカット設定をご利用ください。",
+
+    // Environment Filter Cycling (BMK-ENV-001)
+    envFilterPrefix: "環境",
+    envFilterAll: "すべて",
+    envFilterBtnText: (env) => `環境: ${env === "ALL" ? "すべて" : env}`,
+    envFilterBtnTitle: (env) => `環境フィルタ (${env === "ALL" ? "すべて" : env})。クリックまたは E キーで切り替え。`,
+    envFilterEmptyTitle: (env) => `このタブに ${env} のブックマークはありません`,
+    envFilterEmptyDesc: (env) => `現在のカテゴリには「${env}」タグ付きのリンクがありません（データは削除されていません）。`,
+    envFilterResetBtn: "すべての環境を表示",
+
+    // Private / Hidden Bookmarks UI Toggle (BMK-PRIV-001)
+    hideBookmarkLabel: "ブックマークを非表示にする",
+    hideBookmarkHint: "画面上の非表示のみ（ロックボタンで一時表示可能。暗号化機能ではありません）。",
+    hiddenBookmarkBadge: "非表示",
+    showHiddenBtn: "非表示: ロック中",
+    hideHiddenBtn: "非表示: 表示中",
+    showHiddenTitle: "非表示ブックマークを一時的に表示",
+    hideHiddenTitle: "非表示ブックマークを再度隠す",
+
+    // Scoped Pinned Shelf (BMK-PIN-002)
+    pinnedEmptyEnvHint: (env) => `このタブには「${env}」に一致するピン留めがありません。`
   }
 };
 

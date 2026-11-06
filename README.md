@@ -56,6 +56,19 @@ Run test suite:
 node --test apps/*/tests/*.test.js
 ```
 
+## Release & Git Tag Rules (Agent Policy)
+
+For every completed, verified, deliverable batch of changes in `apps/bookmark-organizer`:
+
+1. Update version in `apps/bookmark-organizer/manifest.json` (and `package.json`) according to Semantic Versioning:
+   - Patch (`0.2.x`): bug fixes
+   - Minor (`0.x.0`): backward-compatible new features
+   - Major (`x.0.0`): breaking changes
+2. Inspect `git status` and `git diff` to ensure `test-data/`, temporary files, and personal bookmark data are never staged.
+3. Commit with a clear message and push to `origin/main`.
+4. Create an annotated Git tag `bookmark-organizer-vX.Y.Z` summarizing user-visible changes and push the tag to `origin`.
+5. Never tag incomplete, unverified, or debug-only commits.
+
 ## Current Status
 
 - [x] Monorepo workspace skeleton with 3 extension directories
