@@ -258,6 +258,7 @@
     linkMetrics: new Map(),
     groupMetrics: new Map(),
     lang: "en",
+    shortcutStatus: null,
     isPrivateUnlocked: false,
     previousActiveElement: null,
     comboboxHighlightedIndex: -1,
@@ -865,6 +866,7 @@
         <div class="pt-footer">
           <span class="pt-footer-scope" id="footerScope"></span>
           <span id="footerNav"></span>
+          <span id="footerWarning" style="display: none; color: var(--danger); cursor: pointer; text-decoration: underline;"></span>
         </div>
       </div>
 
@@ -948,6 +950,7 @@
     emptyState: container.querySelector("#emptyState"),
     footerScope: container.querySelector("#footerScope"),
     footerNav: container.querySelector("#footerNav"),
+    footerWarning: container.querySelector("#footerWarning"),
     captureView: container.querySelector("#captureView"),
     captureBackBtn: container.querySelector("#captureBackBtn"),
     captureBackLabel: container.querySelector("#captureBackLabel"),
@@ -1037,6 +1040,20 @@
         }
       }
     ];
+
+    if (state.shortcutStatus && !state.shortcutStatus.isBound) {
+      commands.push({
+        type: "command",
+        id: "shortcutsSettings",
+        title: state.lang === "ja" ? "拡張機能のショートカットを設定" : "Configure Extension Shortcuts",
+        desc: state.lang === "ja" ? "chrome://extensions/shortcuts を開いてショートカットキーを割り当てます" : "Open chrome://extensions/shortcuts to set shortcut keys",
+        icon: ICONS.externalLink,
+        action: () => {
+          chrome.runtime.sendMessage({ type: "OPEN_SHORTCUTS_SETTINGS" });
+          closeOverlay();
+        }
+      });
+    }
 
     if (!state.query) return commands;
     const q = state.query.toLowerCase().trim();
@@ -1281,6 +1298,18 @@
     els.searchInput.placeholder = state.scope === "all" ? t.placeholderAll : t.placeholderBookmarks;
     els.footerScope.textContent = isMac ? t.scopeHintMac : t.scopeHint;
     els.footerNav.textContent = isMac ? t.navHintMac : t.navHint;
+
+    if (state.shortcutStatus && !state.shortcutStatus.isBound) {
+      els.footerWarning.textContent = state.lang === "ja"
+        ? "⚠️ ショートカット未設定 (クリックして設定)"
+        : "⚠️ Shortcut not set (click to configure)";
+      els.footerWarning.style.display = "inline";
+      els.footerWarning.onclick = () => {
+        chrome.runtime.sendMessage({ type: "OPEN_SHORTCUTS_SETTINGS" });
+      };
+    } else {
+      els.footerWarning.style.display = "none";
+    }
   }
 
   /**
@@ -1648,6 +1677,7 @@
         state.linkMetrics = new Map(resp.linkMetrics || []);
         state.groupMetrics = new Map(resp.groupMetrics || []);
         state.lang = resp.lang || "en";
+        state.shortcutStatus = resp.shortcutStatus || null;
       }
     } catch (err) {
       console.warn("Failed to load overlay data from background:", err);

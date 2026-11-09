@@ -13,7 +13,9 @@ describe("Bookmark Organizer v0.3.1 - Smoke Imports & Architecture Verification"
     // 1. Background worker
     const bgModule = await import(path.join(appDir, "src", "background", "index.js"));
     assert.ok(typeof bgModule.isRestrictedUrl === "function");
+    assert.ok(typeof bgModule.isBookmarkOrganizerUrl === "function");
     assert.ok(typeof bgModule.handleTriggerOverlay === "function");
+    assert.ok(typeof bgModule.getShortcutBindingStatus === "function");
 
     // 2. Storage module
     const storageModule = await import(path.join(appDir, "src", "newtab", "storage.js"));
@@ -55,9 +57,31 @@ describe("Bookmark Organizer v0.3.1 - Smoke Imports & Architecture Verification"
     assert.ok(typeof popupModule.getBookmarkItems === "function");
   });
 
-  describe("Manifest V3 Configuration (Candidate v0.3.1)", () => {
+  describe("Manifest V3 Background Configuration (Service Worker & Firefox fallback)", () => {
     const manifestPath = path.join(appDir, "manifest.json");
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+
+    it("declares background.type as 'module' for ES Module Service Worker execution", () => {
+      assert.ok(manifest.background, "background must be defined");
+      assert.equal(manifest.background.type, "module", "manifest.background.type must be 'module'");
+      assert.equal(manifest.background.service_worker, "src/background/index.js");
+      assert.ok(Array.isArray(manifest.background.scripts), "scripts fallback for Firefox must be array");
+      assert.ok(manifest.background.scripts.includes("src/background/index.js"));
+    });
+
+    it("verifies static constraint: if background entrypoint uses import/export, manifest background.type must be 'module'", () => {
+      const bgEntryPath = path.join(appDir, "src", "background", "index.js");
+      const bgContent = fs.readFileSync(bgEntryPath, "utf-8");
+      const hasEsmKeywords = /^\s*(import|export)\s+/m.test(bgContent);
+
+      if (hasEsmKeywords) {
+        assert.equal(
+          manifest.background.type,
+          "module",
+          "When background entrypoint uses import/export, manifest.background.type MUST be 'module'"
+        );
+      }
+    });
 
     it("has version 0.3.1 and minimal activeTab + scripting permissions", () => {
       assert.equal(manifest.version, "0.3.1");
@@ -80,8 +104,26 @@ describe("Bookmark Organizer v0.3.1 - Smoke Imports & Architecture Verification"
     });
   });
 
-  describe("Restricted URL Detection & Fallback", () => {
-    it("correctly classifies browser internal schemes and extension stores", async () => {
+  describe("Bookmark Organizer URL Detection & Execution Order", () => {
+    it("isBookmarkOrganizerUrl accurately matches newtab URLs and ignores external pages", async () => {
+      const { isBookmarkOrganizerUrl } = await import(path.join(appDir, "src", "background", "index.js"));
+
+      assert.equal(isBookmarkOrganizerUrl("chrome-extension://abcdef/src/newtab/index.html"), true);
+      assert.equal(isBookmarkOrganizerUrl("chrome-extension://abcdef/src/newtab/index.html#search"), true);
+      assert.equal(isBookmarkOrganizerUrl("moz-extension://12345/src/newtab/index.html"), true);
+      assert.equal(isBookmarkOrganizerUrl("https://example.com/"), false);
+      assert.equal(isBookmarkOrganizerUrl("chrome://extensions"), false);
+    });
+
+    it("Bookmark Organizer's own URL is NEVER intercepted as restricted", async () => {
+      const { isRestrictedUrl } = await import(path.join(appDir, "src", "background", "index.js"));
+
+      assert.equal(isRestrictedUrl("chrome-extension://abcdef/src/newtab/index.html"), false);
+      assert.equal(isRestrictedUrl("chrome-extension://abcdef/src/newtab/index.html#search"), false);
+      assert.equal(isRestrictedUrl("moz-extension://12345/src/newtab/index.html"), false);
+    });
+
+    it("true restricted URLs are classified as restricted", async () => {
       const { isRestrictedUrl } = await import(path.join(appDir, "src", "background", "index.js"));
 
       assert.equal(isRestrictedUrl("chrome://extensions"), true);
@@ -100,6 +142,104 @@ describe("Bookmark Organizer v0.3.1 - Smoke Imports & Architecture Verification"
       assert.equal(isRestrictedUrl("http://localhost:3000/"), false);
       assert.equal(isRestrictedUrl("https://news.ycombinator.com/"), false);
       assert.equal(isRestrictedUrl("https://en.wikipedia.org/wiki/Main_Page"), false);
+    });
+
+    it("handleTriggerOverlay prioritizes Bookmark Organizer tab before restricted fallback", async () => {
+      const { handleTriggerOverlay } = await import(path.join(appDir, "src", "background", "index.js"));
+
+      const sentMessages = [];
+      const createdTabs = [];
+      const executedScripts = [];
+
+      globalThis.chrome = {
+        runtime: {
+          getURL: (p) => `chrome-extension://mock-id/${p}`,
+          sendMessage: async (msg) => sentMessages.push({ scope: "runtime", ...msg })
+        },
+        tabs: {
+          sendMessage: async (id, msg) => {
+            sentMessages.push({ scope: "tab", id, ...msg });
+            return { success: true };
+          },
+          create: async (opts) => createdTabs.push(opts)
+        },
+        scripting: {
+          executeScript: async (opts) => executedScripts.push(opts)
+        }
+      };
+
+      // Case 1: Bookmark Organizer own newtab
+      const bmkTab = { id: 101, url: "chrome-extension://mock-id/src/newtab/index.html" };
+      await handleTriggerOverlay(bmkTab);
+      assert.equal(createdTabs.length, 0, "Must not create a new tab if already on Bookmark Organizer");
+      assert.equal(executedScripts.length, 0, "Must not executeScript into Bookmark Organizer");
+      assert.ok(sentMessages.some((m) => m.type === "OPEN_BOOKMARK_SEARCH"));
+
+      // Case 2: Restricted page -> Fallback tab creation
+      sentMessages.length = 0;
+      createdTabs.length = 0;
+      const restrictedTab = { id: 102, url: "chrome://extensions" };
+      await handleTriggerOverlay(restrictedTab);
+      assert.equal(createdTabs.length, 1);
+      assert.match(createdTabs[0].url, /#search$/);
+      assert.equal(executedScripts.length, 0);
+
+      // Case 3: Normal web page -> On-demand injection
+      sentMessages.length = 0;
+      createdTabs.length = 0;
+      // Simulate content script missing on first call
+      globalThis.chrome.tabs.sendMessage = async () => {
+        throw new Error("No receiver");
+      };
+      const normalTab = { id: 103, url: "https://example.com/article" };
+      await handleTriggerOverlay(normalTab);
+      assert.equal(executedScripts.length, 1);
+      assert.equal(executedScripts[0].target.tabId, 103);
+      assert.deepEqual(executedScripts[0].files, ["src/content/overlay.js"]);
+
+      delete globalThis.chrome;
+    });
+  });
+
+  describe("Shortcut Status & Unbound Warning Handling", () => {
+    it("getShortcutBindingStatus reports binding status accurately", async () => {
+      const { getShortcutBindingStatus } = await import(path.join(appDir, "src", "background", "index.js"));
+
+      // Bound mock
+      globalThis.chrome = {
+        commands: {
+          getAll: async () => [
+            { name: "open-bookmark-search", shortcut: "Ctrl+Shift+K", description: "Search" }
+          ]
+        }
+      };
+      const boundRes = await getShortcutBindingStatus();
+      assert.equal(boundRes.isBound, true);
+      assert.equal(boundRes.shortcut, "Ctrl+Shift+K");
+
+      // Unbound mock (shortcut is empty string)
+      globalThis.chrome.commands.getAll = async () => [
+        { name: "open-bookmark-search", shortcut: "", description: "Search" }
+      ];
+      const unboundRes = await getShortcutBindingStatus();
+      assert.equal(unboundRes.isBound, false);
+      assert.equal(unboundRes.shortcut, "");
+
+      delete globalThis.chrome;
+    });
+  });
+
+  describe("Language Storage Consistency across Contexts", () => {
+    it("verifies unified use of powerless_toy_lang key across newtab and background", () => {
+      const appJs = fs.readFileSync(path.join(appDir, "src", "newtab", "app.js"), "utf-8");
+      const bgJs = fs.readFileSync(path.join(appDir, "src", "background", "index.js"), "utf-8");
+
+      assert.match(appJs, /powerless_toy_lang/);
+      assert.match(bgJs, /powerless_toy_lang/);
+      // Verify app.js syncs to chrome.storage.local
+      assert.match(appJs, /chrome\.storage\.local\.set/);
+      // Verify bgJs reads from chrome.storage.local
+      assert.match(bgJs, /chrome\.storage\.local\.get/);
     });
   });
 
@@ -122,7 +262,7 @@ describe("Bookmark Organizer v0.3.1 - Smoke Imports & Architecture Verification"
     });
 
     it("combobox group selection enables save while unselected/typing group disables save", async () => {
-      const { state, validateSaveBtn } = await import(path.join(appDir, "src", "popup", "popup.js"));
+      const { state } = await import(path.join(appDir, "src", "popup", "popup.js"));
 
       // User types into group input
       state.capture.selectedGroupId = "";

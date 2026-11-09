@@ -24,12 +24,49 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onInstalled) {
   });
 }
 
+/**
+ * Check if a URL belongs to the Bookmark Organizer extension itself.
+ */
+export function isBookmarkOrganizerUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== "string") return false;
+  const url = rawUrl.toLowerCase().trim();
+
+  if (typeof chrome !== "undefined" && chrome.runtime?.getURL) {
+    try {
+      const newTabBase = chrome.runtime.getURL("src/newtab/index.html").toLowerCase();
+      if (url.startsWith(newTabBase) || url.replace(/\/+$/, "") === newTabBase.replace(/\/+$/, "")) {
+        return true;
+      }
+    } catch {}
+  }
+
+  const extensionId = typeof chrome !== "undefined" && chrome.runtime?.id ? chrome.runtime.id.toLowerCase() : "";
+  if (extensionId && (url.startsWith(`chrome-extension://${extensionId}/`) || url.startsWith(`moz-extension://${extensionId}/`))) {
+    if (url.includes("/src/newtab/index.html") || url.includes("/newtab.html")) {
+      return true;
+    }
+  }
+
+  if (url.includes("/src/newtab/index.html") || url.endsWith("/newtab.html")) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Check if a URL cannot be injected with content scripts (browser internal, extension store, etc.).
+ * Note: Bookmark Organizer's own new tab page is NOT restricted.
+ */
 export function isRestrictedUrl(rawUrl) {
   if (!rawUrl || typeof rawUrl !== "string") return true;
+  if (isBookmarkOrganizerUrl(rawUrl)) return false;
+
   const url = rawUrl.toLowerCase().trim();
   return (
     url.startsWith("chrome://") ||
     url.startsWith("chrome-extension://") ||
+    url.startsWith("moz-extension://") ||
     url.startsWith("edge://") ||
     url.startsWith("about:") ||
     url.startsWith("view-source:") ||
@@ -40,6 +77,33 @@ export function isRestrictedUrl(rawUrl) {
   );
 }
 
+/**
+ * Check shortcut binding status via chrome.commands.getAll().
+ */
+export async function getShortcutBindingStatus() {
+  if (typeof chrome === "undefined" || !chrome.commands?.getAll) {
+    return { name: "open-bookmark-search", shortcut: "Ctrl+Shift+K", isBound: true };
+  }
+  try {
+    const commands = await chrome.commands.getAll();
+    const cmd = commands.find((c) => c.name === "open-bookmark-search");
+    return {
+      name: "open-bookmark-search",
+      shortcut: cmd?.shortcut || "",
+      isBound: Boolean(cmd?.shortcut && cmd.shortcut.trim().length > 0)
+    };
+  } catch (err) {
+    return { name: "open-bookmark-search", shortcut: "", isBound: false, error: err.message };
+  }
+}
+
+/**
+ * Main trigger router for shortcut or action icon.
+ * Priority order:
+ * 1. Bookmark Organizer new tab page -> Trigger native spotlight search.
+ * 2. Restricted browser pages -> Open Bookmark Organizer with #search overlay.
+ * 3. Normal web pages -> On-demand inject or toggle in-page overlay.
+ */
 export async function handleTriggerOverlay(targetTab = null) {
   let tab = targetTab;
   if (!tab || !tab.id) {
@@ -50,18 +114,24 @@ export async function handleTriggerOverlay(targetTab = null) {
 
   const url = tab.url || "";
 
-  // 1. Restricted browser page -> Open Bookmark Organizer with search overlay
+  // 1. Bookmark Organizer new tab page -> Trigger native spotlight search
+  if (isBookmarkOrganizerUrl(url)) {
+    try {
+      const response = await chrome.tabs.sendMessage(tab.id, { type: "OPEN_BOOKMARK_SEARCH" });
+      if (response?.success) return;
+    } catch {}
+
+    try {
+      await chrome.runtime.sendMessage({ type: "OPEN_BOOKMARK_SEARCH", tabId: tab.id });
+    } catch {}
+    return;
+  }
+
+  // 2. Restricted browser page -> Fallback: Open Bookmark Organizer with search overlay
   if (isRestrictedUrl(url)) {
     await chrome.tabs.create({
       url: chrome.runtime.getURL("src/newtab/index.html#search")
     });
-    return;
-  }
-
-  // 2. Already on Bookmark Organizer new tab page -> Trigger native spotlight search
-  const newTabBase = chrome.runtime.getURL("src/newtab/index.html");
-  if (url.startsWith(newTabBase)) {
-    await chrome.tabs.sendMessage(tab.id, { type: "OPEN_BOOKMARK_SEARCH" }).catch(() => null);
     return;
   }
 
@@ -106,7 +176,7 @@ if (typeof chrome !== "undefined" && chrome.action?.onClicked) {
   });
 }
 
-// Internal messaging from in-page overlay
+// Internal messaging from in-page overlay and newtab
 if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || typeof message !== "object") return;
@@ -119,13 +189,15 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
           const groupMetricsMap = await getGroupMetricsMap();
           const storageRes = await chrome.storage.local.get("powerless_toy_lang").catch(() => ({}));
           const lang = storageRes?.powerless_toy_lang || "en";
+          const shortcutStatus = await getShortcutBindingStatus();
 
           sendResponse({
             success: true,
             data,
             linkMetrics: Array.from(linkMetricsMap.entries()),
             groupMetrics: Array.from(groupMetricsMap.entries()),
-            lang
+            lang,
+            shortcutStatus
           });
         } catch (err) {
           sendResponse({ success: false, error: err.message });
@@ -149,6 +221,20 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
         }
       })();
       return true;
+    }
+
+    if (message.type === "CHECK_SHORTCUT_STATUS") {
+      (async () => {
+        const status = await getShortcutBindingStatus();
+        sendResponse(status);
+      })();
+      return true;
+    }
+
+    if (message.type === "OPEN_SHORTCUTS_SETTINGS") {
+      chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
+      sendResponse({ success: true });
+      return;
     }
 
     if (message.type === "OPEN_URL") {

@@ -246,9 +246,20 @@ const elements = {
 
 // Initialize Application
 async function bootstrapApp() {
-  const savedLang = typeof localStorage !== "undefined" ? localStorage.getItem("powerless_toy_lang") : null;
+  let savedLang = typeof localStorage !== "undefined" ? localStorage.getItem("powerless_toy_lang") : null;
+  if (typeof chrome !== "undefined" && chrome.storage?.local) {
+    try {
+      const stored = await chrome.storage.local.get("powerless_toy_lang");
+      if (stored?.powerless_toy_lang) {
+        savedLang = stored.powerless_toy_lang;
+      }
+    } catch {}
+  }
   if (savedLang) {
     setLanguage(savedLang);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("powerless_toy_lang", savedLang);
+    }
   }
   await initTheme();
   updateI18nLabels();
@@ -269,6 +280,17 @@ async function bootstrapApp() {
     } else if (window.location.hash === "#search") {
       setTimeout(() => openSearchModal(""), 100);
     }
+  }
+
+  // Check keyboard shortcut status
+  if (typeof chrome !== "undefined" && chrome.commands?.getAll) {
+    try {
+      const commands = await chrome.commands.getAll();
+      const searchCmd = commands.find((c) => c.name === "open-bookmark-search");
+      if (searchCmd && !searchCmd.shortcut) {
+        console.warn("[Bookmark Organizer] Centralized search shortcut is not bound. Configure it at chrome://extensions/shortcuts");
+      }
+    } catch {}
   }
 }
 
@@ -533,11 +555,16 @@ function setupEventListeners() {
   });
 
   // Toggle Language
-  elements.langToggleBtn?.addEventListener("click", () => {
+  elements.langToggleBtn?.addEventListener("click", async () => {
     closeMoreMenu();
     const nextLang = getLanguage() === "en" ? "ja" : "en";
     setLanguage(nextLang);
-    localStorage.setItem("powerless_toy_lang", nextLang);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("powerless_toy_lang", nextLang);
+    }
+    if (typeof chrome !== "undefined" && chrome.storage?.local) {
+      await chrome.storage.local.set({ powerless_toy_lang: nextLang });
+    }
     updateI18nLabels();
     renderAll(false);
   });
@@ -690,9 +717,13 @@ function setupEventListeners() {
 
   // Extension command listener (when user triggers shortcut via browser extension command)
   if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
-    chrome.runtime.onMessage.addListener((msg) => {
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (msg && msg.type === "OPEN_BOOKMARK_SEARCH") {
         openSearchModal("");
+        if (typeof sendResponse === "function") {
+          sendResponse({ success: true });
+        }
+        return true;
       }
     });
   }
@@ -700,6 +731,19 @@ function setupEventListeners() {
     chrome.commands.onCommand.addListener((command) => {
       if (command === "open-bookmark-search") {
         openSearchModal("");
+      }
+    });
+  }
+
+  // Hash route listener for in-situ overlay triggers
+  if (typeof window !== "undefined" && window.addEventListener) {
+    window.addEventListener("hashchange", () => {
+      if (window.location.hash === "#search") {
+        openSearchModal("");
+      } else if (window.location.hash === "#export") {
+        openExportModal();
+      } else if (window.location.hash === "#import") {
+        elements.importFileInput?.click();
       }
     });
   }
