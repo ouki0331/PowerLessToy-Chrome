@@ -274,7 +274,12 @@ const translations = {
     clearFilters: "Clear Filters",
     paletteInputPlaceholder: "Search bookmarks or type commands (Ctrl/Cmd+K to switch)...",
     paletteFooterNavHint: "↑↓ Select · Enter Open / Run · Ctrl/⌘+Enter New Tab · Esc Close",
-    noCommandsMatch: "No matching commands found"
+    noCommandsMatch: "No matching commands found",
+    paletteSearchPlaceholderAll: "Search commands or bookmarks...",
+    paletteSearchPlaceholderBookmarks: "Search bookmarks only...",
+    captureSelectGroupHint: "Please select a target group from the list",
+    paletteScopeToggleHint: (key) => `${key}: Toggle scope`,
+    paletteNavHint: (mod) => `↑↓ Select · Enter Open · ${mod}+Enter New Tab · Esc Close`
   },
   ja: {
     appTitle: "Bookmark Organizer",
@@ -546,7 +551,12 @@ const translations = {
     clearFilters: "フィルタをクリア",
     paletteInputPlaceholder: "ブックマークを検索またはコマンドを入力 (Ctrl/Cmd+K で切替)...",
     paletteFooterNavHint: "↑↓ 選択 · Enter 開く/実行 · Ctrl/⌘+Enter 新規タブ · Esc 閉じる",
-    noCommandsMatch: "一致するコマンドが見つかりません"
+    noCommandsMatch: "一致するコマンドが見つかりません",
+    paletteSearchPlaceholderAll: "コマンドまたはブックマークを検索...",
+    paletteSearchPlaceholderBookmarks: "ブックマークのみを検索...",
+    captureSelectGroupHint: "リストから保存先グループを選択してください",
+    paletteScopeToggleHint: (key) => `${key}: 範囲を切替`,
+    paletteNavHint: (mod) => `↑↓ 選択 · Enter 開く · ${mod}+Enter 新規タブ · Esc 閉じる`
   }
 };
 

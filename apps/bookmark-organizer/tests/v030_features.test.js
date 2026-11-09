@@ -85,19 +85,21 @@ describe("Bookmark Organizer v0.3.0 Capabilities", () => {
   };
 
   describe("CMD-SEARCH-001 & Popup Manifest / Action Integration", () => {
-    it("manifest.json defines 0.3.0, activeTab permission, and _execute_action shortcut", () => {
+    it("manifest.json defines 0.3.1, activeTab/scripting permission, and open-bookmark-search shortcut", () => {
       const manifestPath = path.join(appDir, "manifest.json");
       const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
 
-      assert.equal(manifest.version, "0.3.0");
+      assert.equal(manifest.version, "0.3.1");
       assert.ok(manifest.permissions.includes("storage"));
       assert.ok(manifest.permissions.includes("activeTab"));
+      assert.ok(manifest.permissions.includes("scripting"));
       assert.ok(!manifest.permissions.includes("<all_urls>"), "Must never request <all_urls>");
 
       assert.ok(manifest.commands);
-      assert.ok(manifest.commands._execute_action);
-      assert.equal(manifest.commands._execute_action.suggested_key.default, "Ctrl+Shift+K");
-      assert.equal(manifest.commands._execute_action.suggested_key.mac, "Command+Shift+K");
+      assert.ok(manifest.commands["open-bookmark-search"]);
+      assert.equal(manifest.commands["open-bookmark-search"].suggested_key.default, "Ctrl+Shift+K");
+      assert.equal(manifest.commands["open-bookmark-search"].suggested_key.mac, "Command+Shift+K");
+      assert.ok(!manifest.commands._execute_action, "Must not duplicate with _execute_action");
     });
 
     it("popup index.html defines both Command Mode and Bookmark Mode with autofocus input", () => {

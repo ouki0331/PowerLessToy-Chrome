@@ -86,7 +86,7 @@ body.palette-body {
 }
 
 .palette-modes {
-  display: flex;
+  display: none;
   align-items: center;
   background: var(--bg-secondary);
   padding: 2px;
@@ -421,6 +421,12 @@ mark.search-highlight {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.3px;
+}
+
+.form-hint-error {
+  color: var(--danger, #df382b);
+  font-size: 11px;
+  margin-top: 4px;
 }
 
 .form-input {

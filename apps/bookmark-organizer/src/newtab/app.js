@@ -266,6 +266,8 @@ async function bootstrapApp() {
       setTimeout(() => openExportModal(), 100);
     } else if (window.location.hash === "#import") {
       setTimeout(() => elements.importFileInput?.click(), 100);
+    } else if (window.location.hash === "#search") {
+      setTimeout(() => openSearchModal(""), 100);
     }
   }
 }

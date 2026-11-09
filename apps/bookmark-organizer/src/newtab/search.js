@@ -467,14 +467,14 @@ export function evaluateSearchShortcut(event, { activeElement = null, hasBlockin
   const key = event.key;
   const lowerKey = key.toLowerCase();
 
-  // 1. Ctrl+K or Command+K (metaKey+K)
-  if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && lowerKey === "k") {
+  // 1. Ctrl+K, Command+K, Ctrl+Shift+K, or Command+Shift+K
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && lowerKey === "k") {
     if (hasBlockingModal) {
       return { shouldOpen: false, reason: "blocking_modal" };
     }
     return {
       shouldOpen: true,
-      trigger: event.metaKey ? "cmd+k" : "ctrl+k",
+      trigger: event.metaKey ? (event.shiftKey ? "cmd+shift+k" : "cmd+k") : (event.shiftKey ? "ctrl+shift+k" : "ctrl+k"),
       preventDefault: true
     };
   }

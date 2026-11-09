@@ -3,10 +3,9 @@
  *
  * Implements:
  * - Omnipresent popup entry via Ctrl/Cmd+Shift+K or extension action icon.
- * - Mode A: Commands Palette (Capture, Workbench, Search, Toggle Private, Import, Export).
- * - Mode B: Bookmark Search Palette (Cross-tab search, Tab/Tag filtering, Highlight, Pinned/Recent empty-state).
- * - Mode switching via Ctrl/Cmd+K or clicking header tab indicator.
- * - Quick Page Capture with URL tracking cleaner, Group combobox, Title suggestions, and Duplicate detection.
+ * - Single continuous stream: Commands listed first, Bookmarks listed second.
+ * - Scope toggling: Ctrl/Cmd+Shift+K toggles between "all" and "bookmarks".
+ * - Quick Page Capture with URL tracking cleaner, Group combobox, and Duplicate detection.
  * - Full keyboard navigation (ArrowUp/Down, Enter, Ctrl/Cmd+Enter, Esc).
  * - Safe restricted-page detection without crashing.
  */
@@ -17,19 +16,20 @@ import {
   cleanTrackingUrl,
   findDuplicateLink,
   filterGroupsForCombobox,
-  getGroupUsageMetrics,
-  getLinkUsageMetrics,
-  isPrivateUnlocked,
-  setPrivateUnlocked
+  getGroupMetricsMap,
+  getLinkMetricsMap
 } from "../newtab/storage.js";
 
 import { searchBookmarks, appendHighlightedText } from "../newtab/search.js";
 import { SVG_ICONS, renderSvgIcon } from "../newtab/icons.js";
 import { t } from "../newtab/i18n.js";
 
+// Session-level in-memory private unlock state (default locked)
+let isPrivateUnlocked = false;
+
 // Global Palette State
 const state = {
-  mode: "commands", // "commands" | "bookmarks"
+  scope: "all", // "all" | "bookmarks"
   data: null,
   linkMetrics: new Map(),
   groupMetrics: new Map(),
@@ -40,6 +40,8 @@ const state = {
   tagFilter: "ALL",
   selectedIndex: 0,
   currentItems: [],
+  comboboxHighlightedIndex: -1,
+  comboboxMatches: [],
   capture: {
     originalUrl: "",
     cleanedUrl: "",
@@ -87,6 +89,7 @@ function initDomReferences() {
   elements.captureGroupInput = document.getElementById("captureGroupInput");
   elements.captureGroupId = document.getElementById("captureGroupId");
   elements.groupSuggestionsList = document.getElementById("groupSuggestionsList");
+  elements.groupValidationHint = document.getElementById("groupValidationHint");
   elements.captureQuickTags = document.getElementById("captureQuickTags");
   elements.captureCustomTagInput = document.getElementById("captureCustomTagInput");
   elements.captureDuplicateAlert = document.getElementById("captureDuplicateAlert");
@@ -99,13 +102,18 @@ function initDomReferences() {
 }
 
 function renderStaticIcons() {
-  renderSvgIcon(document.getElementById("modeCmdIcon"), SVG_ICONS.command);
-  renderSvgIcon(document.getElementById("modeBmkIcon"), SVG_ICONS.bookmark);
-  renderSvgIcon(document.getElementById("paletteSearchIcon"), SVG_ICONS.search);
-  renderSvgIcon(document.getElementById("paletteClearIcon"), SVG_ICONS.close);
-  renderSvgIcon(document.getElementById("captureBackIcon"), SVG_ICONS.chevronDown);
-  renderSvgIcon(document.getElementById("captureFaviconFallback"), SVG_ICONS.globe);
-  renderSvgIcon(document.getElementById("captureToastIcon"), SVG_ICONS.checkCircle);
+  if (elements.modeCmdIcon) renderSvgIcon(elements.modeCmdIcon, SVG_ICONS.command);
+  if (elements.modeBmkIcon) renderSvgIcon(elements.modeBmkIcon, SVG_ICONS.bookmark);
+  const pSearchIcon = document.getElementById("paletteSearchIcon");
+  if (pSearchIcon) renderSvgIcon(pSearchIcon, SVG_ICONS.search);
+  const pClearIcon = document.getElementById("paletteClearIcon");
+  if (pClearIcon) renderSvgIcon(pClearIcon, SVG_ICONS.close);
+  const cBackIcon = document.getElementById("captureBackIcon");
+  if (cBackIcon) renderSvgIcon(cBackIcon, SVG_ICONS.chevronDown);
+  const cFavFallback = document.getElementById("captureFaviconFallback");
+  if (cFavFallback) renderSvgIcon(cFavFallback, SVG_ICONS.globe);
+  const cToastIcon = document.getElementById("captureToastIcon");
+  if (cToastIcon) renderSvgIcon(cToastIcon, SVG_ICONS.checkCircle);
 }
 
 /**
@@ -173,10 +181,12 @@ function openWorkbench(hash = "") {
 
   if (createTab) {
     createTab({ url: newTabUrl });
-  } else {
+  } else if (typeof window !== "undefined") {
     window.open(newTabUrl, "_blank");
   }
-  window.close();
+  if (typeof window !== "undefined" && window.close) {
+    window.close();
+  }
 }
 
 /**
@@ -195,7 +205,7 @@ function openUrl(url, { inBackground = false } = {}) {
 
     if (createTab) {
       createTab({ url, active: false });
-    } else {
+    } else if (typeof window !== "undefined") {
       window.open(url, "_blank");
     }
   } else {
@@ -208,51 +218,38 @@ function openUrl(url, { inBackground = false } = {}) {
 
     if (updateTab && state.activeTab?.id) {
       updateTab(state.activeTab.id, { url });
-    } else {
+    } else if (typeof window !== "undefined") {
       window.location.href = url;
     }
   }
-  window.close();
-}
-
-/**
- * Switch mode between Commands (A) and Bookmarks (B)
- */
-function switchMode(newMode) {
-  state.mode = newMode;
-  state.selectedIndex = 0;
-
-  if (newMode === "commands") {
-    elements.modeCmdBtn.classList.add("is-active");
-    elements.modeCmdBtn.setAttribute("aria-selected", "true");
-    elements.modeBmkBtn.classList.remove("is-active");
-    elements.modeBmkBtn.setAttribute("aria-selected", "false");
-    elements.paletteFilterBar.style.display = "none";
-    elements.paletteInput.placeholder = t("paletteInputPlaceholder");
-  } else {
-    elements.modeBmkBtn.classList.add("is-active");
-    elements.modeBmkBtn.setAttribute("aria-selected", "true");
-    elements.modeCmdBtn.classList.remove("is-active");
-    elements.modeCmdBtn.setAttribute("aria-selected", "false");
-    elements.paletteFilterBar.style.display = "flex";
-    elements.paletteInput.placeholder = t("searchPlaceholder");
+  if (typeof window !== "undefined" && window.close) {
+    window.close();
   }
-
-  elements.quickCaptureView.style.display = "none";
-  elements.paletteResultsSection.style.display = "block";
-
-  renderPaletteList();
-  elements.paletteInput.focus();
 }
 
 /**
- * Build Command items for Mode A
+ * Switch scope between all (Commands + Bookmarks) and bookmarks
+ */
+function toggleScope() {
+  state.scope = state.scope === "all" ? "bookmarks" : "all";
+  state.selectedIndex = 0;
+  if (elements.paletteInput) {
+    elements.paletteInput.placeholder =
+      state.scope === "all" ? t("paletteSearchPlaceholderAll") : t("paletteSearchPlaceholderBookmarks");
+    elements.paletteInput.focus();
+  }
+  if (elements.paletteListbox) {
+    renderPaletteList();
+  }
+}
+
+/**
+ * Build Command items
  */
 function getCommandItems() {
-  const isUnlocked = isPrivateUnlocked();
-
   const commands = [
     {
+      type: "command",
       id: "capture",
       title: t("cmdCaptureTitle"),
       desc: state.isRestricted ? t("captureRestrictedTitle") : t("cmdCaptureDesc"),
@@ -261,6 +258,7 @@ function getCommandItems() {
       action: () => openQuickCapture()
     },
     {
+      type: "command",
       id: "workbench",
       title: t("cmdWorkbenchTitle"),
       desc: t("cmdWorkbenchDesc"),
@@ -268,23 +266,26 @@ function getCommandItems() {
       action: () => openWorkbench()
     },
     {
+      type: "command",
       id: "search",
       title: t("cmdSearchTitle"),
       desc: t("cmdSearchDesc"),
       icon: SVG_ICONS.search,
-      action: () => switchMode("bookmarks")
+      action: () => toggleScope()
     },
     {
+      type: "command",
       id: "togglePrivate",
-      title: isUnlocked ? t("hideHiddenTitle") : t("showHiddenTitle"),
+      title: isPrivateUnlocked ? t("hideHiddenTitle") : t("showHiddenTitle"),
       desc: t("cmdTogglePrivateDesc"),
-      icon: isUnlocked ? SVG_ICONS.unlock : SVG_ICONS.lock,
+      icon: isPrivateUnlocked ? SVG_ICONS.unlock : SVG_ICONS.lock,
       action: () => {
-        setPrivateUnlocked(!isUnlocked);
+        isPrivateUnlocked = !isPrivateUnlocked;
         renderPaletteList();
       }
     },
     {
+      type: "command",
       id: "import",
       title: t("cmdImportTitle"),
       desc: t("cmdImportDesc"),
@@ -292,6 +293,7 @@ function getCommandItems() {
       action: () => openWorkbench("#import")
     },
     {
+      type: "command",
       id: "export",
       title: t("cmdExportTitle"),
       desc: t("cmdExportDesc"),
@@ -309,20 +311,22 @@ function getCommandItems() {
 }
 
 /**
- * Build Bookmark search items for Mode B
+ * Build Bookmark search items
  */
 function getBookmarkItems() {
   if (!state.data) return [];
 
-  const isUnlocked = isPrivateUnlocked();
   const searchRes = searchBookmarks(state.data, state.query, {
     linkMetricsMap: state.linkMetrics,
     groupMetricsMap: state.groupMetrics,
-    includeHidden: isUnlocked,
+    includeHidden: isPrivateUnlocked,
     maxRecent: 10
   });
 
-  let items = searchRes.results || [];
+  let items = (searchRes.results || []).map((item) => ({
+    ...item,
+    type: "bookmark"
+  }));
 
   // Filter by Tab
   if (state.tabFilter !== "ALL") {
@@ -340,146 +344,102 @@ function getBookmarkItems() {
 }
 
 /**
- * Render Palette items in listbox
+ * Render Unified Continuous Stream
  */
 function renderPaletteList() {
   elements.paletteListbox.replaceChildren();
 
-  if (state.mode === "commands") {
-    const items = getCommandItems();
-    state.currentItems = items;
-    elements.paletteSectionHeader.textContent = t("cmdModeLabel");
-    elements.paletteStatCount.textContent = `${items.length} commands`;
+  const commands = state.scope === "all" ? getCommandItems() : [];
+  const bookmarks = getBookmarkItems();
+  const allItems = [...commands, ...bookmarks];
+  state.currentItems = allItems;
 
-    if (items.length === 0) {
-      elements.paletteEmptyState.style.display = "block";
-      elements.paletteEmptyTitle.textContent = t("noCommandsMatch");
-      elements.paletteEmptyDesc.textContent = state.query;
-      return;
-    }
+  if (allItems.length === 0) {
+    elements.paletteEmptyState.style.display = "block";
+    elements.paletteEmptyTitle.textContent = state.query ? t("searchNoResultsTitle") : t("noCommandsMatch");
+    elements.paletteEmptyDesc.textContent = state.query ? t("searchNoResultsDesc", state.query) : "";
+    if (elements.paletteSectionHeader) elements.paletteSectionHeader.textContent = "";
+    if (elements.paletteStatCount) elements.paletteStatCount.textContent = "0 items";
+    return;
+  }
 
-    elements.paletteEmptyState.style.display = "none";
-    if (state.selectedIndex >= items.length) state.selectedIndex = 0;
+  elements.paletteEmptyState.style.display = "none";
+  if (state.selectedIndex >= allItems.length) state.selectedIndex = 0;
 
-    items.forEach((cmd, idx) => {
-      const itemEl = document.createElement("div");
-      itemEl.className = `palette-item ${idx === state.selectedIndex ? "is-selected" : ""} ${
-        cmd.disabled ? "is-disabled" : ""
-      }`;
-      itemEl.setAttribute("role", "option");
-      itemEl.setAttribute("aria-selected", idx === state.selectedIndex ? "true" : "false");
+  if (elements.paletteStatCount) {
+    elements.paletteStatCount.textContent = `${allItems.length} items`;
+  }
+  if (elements.paletteSectionHeader) {
+    elements.paletteSectionHeader.textContent = state.query ? t("searchResultsHeading") || "Results" : t("searchSectionRecent");
+  }
 
-      const iconBox = document.createElement("div");
-      iconBox.className = "item-icon-box";
-      renderSvgIcon(iconBox, cmd.icon);
+  const queryTokens = state.query ? state.query.toLowerCase().trim().split(/\s+/) : [];
 
-      const content = document.createElement("div");
-      content.className = "item-content";
+  allItems.forEach((item, idx) => {
+    const isSelected = idx === state.selectedIndex;
+    const itemEl = document.createElement("div");
+    itemEl.className = `palette-item ${isSelected ? "is-selected" : ""} ${item.disabled ? "is-disabled" : ""}`;
+    itemEl.setAttribute("role", "option");
+    itemEl.setAttribute("aria-selected", isSelected ? "true" : "false");
 
-      const titleRow = document.createElement("div");
-      titleRow.className = "item-title-row";
-      const titleSpan = document.createElement("span");
-      titleSpan.className = "item-title";
-      titleSpan.textContent = cmd.title;
-      titleRow.appendChild(titleSpan);
-
-      if (cmd.disabled) {
-        const badgeSpan = document.createElement("span");
-        badgeSpan.className = "item-badge";
-        badgeSpan.textContent = "Disabled";
-        titleRow.appendChild(badgeSpan);
-      }
-
-      const desc = document.createElement("div");
-      desc.className = "item-desc";
-      desc.textContent = cmd.desc;
-
-      content.appendChild(titleRow);
-      content.appendChild(desc);
-
-      itemEl.appendChild(iconBox);
-      itemEl.appendChild(content);
-
-      itemEl.addEventListener("click", () => {
-        if (!cmd.disabled && typeof cmd.action === "function") {
-          cmd.action();
-        }
-      });
-
-      elements.paletteListbox.appendChild(itemEl);
-    });
-  } else {
-    // Bookmark Mode
-    const items = getBookmarkItems();
-    state.currentItems = items;
-    const isFiltered = state.tabFilter !== "ALL" || state.tagFilter !== "ALL";
-    elements.paletteClearFiltersBtn.style.display = isFiltered ? "inline-block" : "none";
-
-    elements.paletteSectionHeader.textContent = state.query
-      ? t("searchSectionResults", items.length)
-      : t("searchSectionRecent");
-    elements.paletteStatCount.textContent = `${items.length} bookmarks`;
-
-    if (items.length === 0) {
-      elements.paletteEmptyState.style.display = "block";
-      elements.paletteEmptyTitle.textContent = t("searchNoResultsTitle");
-      elements.paletteEmptyDesc.textContent = state.query
-        ? t("searchNoResultsDesc", state.query)
-        : t("searchEmptyWorkspace");
-      return;
-    }
-
-    elements.paletteEmptyState.style.display = "none";
-    if (state.selectedIndex >= items.length) state.selectedIndex = 0;
-
-    const queryTokens = state.query ? state.query.toLowerCase().trim().split(/\s+/) : [];
-
-    items.forEach((item, idx) => {
-      const itemEl = document.createElement("div");
-      itemEl.className = `palette-item ${idx === state.selectedIndex ? "is-selected" : ""}`;
-      itemEl.setAttribute("role", "option");
-      itemEl.setAttribute("aria-selected", idx === state.selectedIndex ? "true" : "false");
-
-      const iconBox = document.createElement("div");
-      iconBox.className = "item-icon-box";
+    const iconBox = document.createElement("div");
+    iconBox.className = "item-icon-box";
+    if (item.type === "command") {
+      renderSvgIcon(iconBox, item.icon);
+    } else {
       renderSvgIcon(iconBox, item.link?.pinned ? SVG_ICONS.heartFilled : SVG_ICONS.bookmark);
+    }
 
-      const content = document.createElement("div");
-      content.className = "item-content";
+    const content = document.createElement("div");
+    content.className = "item-content";
 
-      const titleRow = document.createElement("div");
-      titleRow.className = "item-title-row";
-      const titleSpan = document.createElement("span");
-      titleSpan.className = "item-title";
+    const titleRow = document.createElement("div");
+    titleRow.className = "item-title-row";
+    const titleSpan = document.createElement("span");
+    titleSpan.className = "item-title";
+
+    if (item.type === "command") {
+      titleSpan.textContent = item.title;
+    } else {
       appendHighlightedText(titleSpan, item.title, queryTokens);
-      titleRow.appendChild(titleSpan);
+    }
+    titleRow.appendChild(titleSpan);
 
-      if (item.badge) {
-        const badgeSpan = document.createElement("span");
-        badgeSpan.className = "item-badge";
-        badgeSpan.textContent = item.badge;
-        titleRow.appendChild(badgeSpan);
-      }
+    if (item.badge) {
+      const badgeSpan = document.createElement("span");
+      badgeSpan.className = "item-badge";
+      badgeSpan.textContent = item.badge;
+      titleRow.appendChild(badgeSpan);
+    } else if (item.disabled) {
+      const badgeSpan = document.createElement("span");
+      badgeSpan.className = "item-badge";
+      badgeSpan.textContent = "Disabled";
+      titleRow.appendChild(badgeSpan);
+    }
 
-      const desc = document.createElement("div");
-      desc.className = "item-desc";
+    const desc = document.createElement("div");
+    desc.className = "item-desc";
+    if (item.type === "command") {
+      desc.textContent = item.desc;
+    } else {
       const breadcrumbs = `${item.categoryName || ""} › ${item.groupName || ""}`;
       const hostname = item.cleanHostnameLower || item.hostname || "";
       desc.textContent = `${breadcrumbs} · ${hostname}`;
+    }
 
-      content.appendChild(titleRow);
-      content.appendChild(desc);
+    content.appendChild(titleRow);
+    content.appendChild(desc);
 
-      itemEl.appendChild(iconBox);
-      itemEl.appendChild(content);
+    itemEl.appendChild(iconBox);
+    itemEl.appendChild(content);
 
-      itemEl.addEventListener("click", () => {
-        openUrl(item.link?.url);
-      });
-
-      elements.paletteListbox.appendChild(itemEl);
+    itemEl.addEventListener("click", () => {
+      state.selectedIndex = idx;
+      executeSelectedItem({ inBackground: false });
     });
-  }
+
+    elements.paletteListbox.appendChild(itemEl);
+  });
 
   scrollSelectedItemIntoView();
 }
@@ -488,6 +448,19 @@ function scrollSelectedItemIntoView() {
   const selectedEl = elements.paletteListbox.querySelector(".palette-item.is-selected");
   if (selectedEl) {
     selectedEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+}
+
+function executeSelectedItem({ inBackground = false } = {}) {
+  const selected = state.currentItems[state.selectedIndex];
+  if (!selected) return;
+
+  if (selected.type === "command") {
+    if (!selected.disabled && typeof selected.action === "function") {
+      selected.action();
+    }
+  } else {
+    openUrl(selected.link?.url, { inBackground });
   }
 }
 
@@ -545,8 +518,18 @@ function openQuickCapture() {
     elements.captureGroupId.value = defaultGroup.id;
     elements.captureGroupInput.value = `${defaultGroup.name} (${defaultGroup.categoryName})`;
     state.capture.selectedGroupId = defaultGroup.id;
+    if (elements.groupValidationHint) elements.groupValidationHint.style.display = "none";
     updateTitleSuggestions(defaultGroup.id, pageTitle);
+  } else {
+    elements.captureGroupId.value = "";
+    elements.captureGroupInput.value = "";
+    state.capture.selectedGroupId = "";
   }
+
+  // Reset tag
+  state.capture.selectedTag = "";
+  elements.captureCustomTagInput.value = "";
+  elements.captureQuickTags.querySelectorAll(".tag-chip").forEach((c) => c.classList.remove("is-active"));
 
   // Check duplicate
   checkDuplicateUrl(elements.captureUrlInput.value);
@@ -570,7 +553,6 @@ function updateTitleSuggestions(groupId, pageTitle) {
   const existingTitles = [...new Set(groupLinks.map((l) => (l.name || "").trim()).filter(Boolean))];
 
   if (existingTitles.length === 1 && existingTitles[0] !== pageTitle) {
-    // If all existing links in group have identical title, auto-reuse it
     elements.captureTitleInput.value = existingTitles[0];
   }
 
@@ -583,6 +565,7 @@ function updateTitleSuggestions(groupId, pageTitle) {
       chip.textContent = title;
       chip.addEventListener("click", () => {
         elements.captureTitleInput.value = title;
+        validateSaveBtn();
       });
       elements.titleChipsList.appendChild(chip);
     });
@@ -608,8 +591,17 @@ function checkDuplicateUrl(url) {
     elements.captureSaveBtn.disabled = true;
   } else {
     elements.captureDuplicateAlert.style.display = "none";
-    elements.captureSaveBtn.disabled = false;
+    validateSaveBtn();
   }
+}
+
+function validateSaveBtn() {
+  const hasTitle = Boolean(elements.captureTitleInput.value.trim());
+  const hasUrl = Boolean(elements.captureUrlInput.value.trim());
+  const hasGroup = Boolean(state.capture.selectedGroupId);
+  const hasDup = Boolean(state.capture.duplicate);
+
+  elements.captureSaveBtn.disabled = !hasTitle || !hasUrl || !hasGroup || hasDup;
 }
 
 /**
@@ -621,6 +613,8 @@ function setupGroupCombobox() {
 
   function renderGroupSuggestions(query) {
     const matched = filterGroupsForCombobox(state.data, query, state.groupMetrics);
+    state.comboboxMatches = matched;
+    state.comboboxHighlightedIndex = -1;
     listbox.replaceChildren();
 
     if (matched.length === 0) {
@@ -645,23 +639,60 @@ function setupGroupCombobox() {
       item.appendChild(tabSpan);
 
       item.addEventListener("click", () => {
-        elements.captureGroupId.value = group.id;
-        input.value = `${group.name} (${group.categoryName})`;
-        state.capture.selectedGroupId = group.id;
-        listbox.style.display = "none";
-        updateTitleSuggestions(group.id, elements.captureTitleInput.value);
+        selectGroupCandidate(group);
       });
 
       listbox.appendChild(item);
     });
   }
 
+  function selectGroupCandidate(group) {
+    elements.captureGroupId.value = group.id;
+    input.value = `${group.name} (${group.categoryName})`;
+    state.capture.selectedGroupId = group.id;
+    listbox.style.display = "none";
+    if (elements.groupValidationHint) elements.groupValidationHint.style.display = "none";
+    updateTitleSuggestions(group.id, elements.captureTitleInput.value);
+    validateSaveBtn();
+  }
+
+  // Typing in Group input immediately clears selectedGroupId and disables save
   input.addEventListener("input", (e) => {
+    elements.captureGroupId.value = "";
+    state.capture.selectedGroupId = "";
+    if (elements.groupValidationHint) {
+      elements.groupValidationHint.textContent = t("captureSelectGroupHint");
+      elements.groupValidationHint.style.display = "block";
+    }
+    validateSaveBtn();
     renderGroupSuggestions(e.target.value);
   });
 
   input.addEventListener("focus", () => {
     renderGroupSuggestions(input.value);
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (listbox.style.display === "none") return;
+    const items = listbox.querySelectorAll(".combobox-group-item");
+    if (items.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      state.comboboxHighlightedIndex = (state.comboboxHighlightedIndex + 1) % items.length;
+      items.forEach((it, i) => it.classList.toggle("is-highlighted", i === state.comboboxHighlightedIndex));
+      items[state.comboboxHighlightedIndex]?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      state.comboboxHighlightedIndex = (state.comboboxHighlightedIndex - 1 + items.length) % items.length;
+      items.forEach((it, i) => it.classList.toggle("is-highlighted", i === state.comboboxHighlightedIndex));
+      items[state.comboboxHighlightedIndex]?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (state.comboboxHighlightedIndex >= 0 && state.comboboxMatches[state.comboboxHighlightedIndex]) {
+        selectGroupCandidate(state.comboboxMatches[state.comboboxHighlightedIndex]);
+      }
+    }
   });
 
   document.addEventListener("click", (e) => {
@@ -672,55 +703,14 @@ function setupGroupCombobox() {
 }
 
 /**
- * Populate Tab and Tag filter dropdowns
- */
-function setupFilters() {
-  if (!state.data) return;
-
-  // Tab filter options
-  elements.paletteTabFilter.replaceChildren();
-  const defaultOpt = document.createElement("option");
-  defaultOpt.value = "ALL";
-  defaultOpt.textContent = t("tabFilterAll");
-  elements.paletteTabFilter.appendChild(defaultOpt);
-  (state.data.categories || []).forEach((cat) => {
-    const opt = document.createElement("option");
-    opt.value = cat.id;
-    opt.textContent = cat.name;
-    elements.paletteTabFilter.appendChild(opt);
-  });
-
-  elements.paletteTabFilter.addEventListener("change", (e) => {
-    state.tabFilter = e.target.value;
-    state.selectedIndex = 0;
-    renderPaletteList();
-  });
-
-  elements.paletteTagFilter.addEventListener("change", (e) => {
-    state.tagFilter = e.target.value;
-    state.selectedIndex = 0;
-    renderPaletteList();
-  });
-
-  elements.paletteClearFiltersBtn.addEventListener("click", () => {
-    state.tabFilter = "ALL";
-    state.tagFilter = "ALL";
-    elements.paletteTabFilter.value = "ALL";
-    elements.paletteTagFilter.value = "ALL";
-    state.selectedIndex = 0;
-    renderPaletteList();
-  });
-}
-
-/**
  * Setup Keyboard Event Listeners for Palette
  */
 function setupKeyboardNavigation() {
   window.addEventListener("keydown", (e) => {
-    const isCmdK = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k";
-    if (isCmdK) {
+    const isShortcut = (e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "k");
+    if (isShortcut) {
       e.preventDefault();
-      switchMode(state.mode === "commands" ? "bookmarks" : "commands");
+      toggleScope();
       return;
     }
 
@@ -753,17 +743,8 @@ function setupKeyboardNavigation() {
         }
       } else if (e.key === "Enter") {
         e.preventDefault();
-        const selected = state.currentItems[state.selectedIndex];
-        if (!selected) return;
-
-        if (state.mode === "commands") {
-          if (!selected.disabled && typeof selected.action === "function") {
-            selected.action();
-          }
-        } else {
-          const inBackground = e.ctrlKey || e.metaKey;
-          openUrl(selected.link?.url, { inBackground });
-        }
+        const inBackground = e.ctrlKey || e.metaKey;
+        executeSelectedItem({ inBackground });
       }
     }
   });
@@ -816,6 +797,10 @@ function setupQuickCaptureHandlers() {
     checkDuplicateUrl(e.target.value);
   });
 
+  elements.captureTitleInput.addEventListener("input", () => {
+    validateSaveBtn();
+  });
+
   // Tag quick selection
   elements.captureQuickTags.querySelectorAll(".tag-chip").forEach((chip) => {
     chip.addEventListener("click", () => {
@@ -834,12 +819,16 @@ function setupQuickCaptureHandlers() {
     });
   });
 
+  // Custom Tag Input: clearing immediately resets selectedTag to ""
   elements.captureCustomTagInput.addEventListener("input", (e) => {
-    if (e.target.value.trim()) {
+    const val = e.target.value.trim();
+    if (val) {
       elements.captureQuickTags
         .querySelectorAll(".tag-chip")
         .forEach((c) => c.classList.remove("is-active"));
-      state.capture.selectedTag = e.target.value.trim();
+      state.capture.selectedTag = val;
+    } else {
+      state.capture.selectedTag = "";
     }
   });
 
@@ -880,27 +869,49 @@ function setupQuickCaptureHandlers() {
 }
 
 // Bootstrap
-document.addEventListener("DOMContentLoaded", async () => {
-  initDomReferences();
-  renderStaticIcons();
+if (typeof document !== "undefined" && document.addEventListener) {
+  document.addEventListener("DOMContentLoaded", async () => {
+    initDomReferences();
+    renderStaticIcons();
 
-  elements.modeCmdBtn.addEventListener("click", () => switchMode("commands"));
-  elements.modeBmkBtn.addEventListener("click", () => switchMode("bookmarks"));
+    if (elements.modeCmdBtn) {
+      elements.modeCmdBtn.addEventListener("click", () => {
+        state.scope = "all";
+        renderPaletteList();
+      });
+    }
+    if (elements.modeBmkBtn) {
+      elements.modeBmkBtn.addEventListener("click", () => {
+        state.scope = "bookmarks";
+        renderPaletteList();
+      });
+    }
 
-  await detectActiveTab();
+    await detectActiveTab();
 
-  try {
-    state.data = await loadWorkbenchData();
-    state.linkMetrics = await getLinkUsageMetrics();
-    state.groupMetrics = await getGroupUsageMetrics();
-  } catch (err) {
-    console.error("Failed to load workbench data in popup:", err);
-  }
+    try {
+      state.data = await loadWorkbenchData();
+      state.linkMetrics = await getLinkMetricsMap();
+      state.groupMetrics = await getGroupMetricsMap();
+    } catch (err) {
+      console.error("Failed to load workbench data in popup:", err);
+    }
 
-  setupFilters();
-  setupGroupCombobox();
-  setupKeyboardNavigation();
-  setupQuickCaptureHandlers();
+    setupGroupCombobox();
+    setupKeyboardNavigation();
+    setupQuickCaptureHandlers();
 
-  switchMode("commands");
-});
+    state.scope = "all";
+    elements.paletteInput.placeholder = t("paletteSearchPlaceholderAll");
+    renderPaletteList();
+  });
+}
+
+export {
+  state,
+  getCommandItems,
+  getBookmarkItems,
+  toggleScope,
+  checkDuplicateUrl,
+  validateSaveBtn
+};

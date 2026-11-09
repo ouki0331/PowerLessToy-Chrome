@@ -11,7 +11,7 @@
   <div class="palette-container" id="paletteContainer" role="dialog" aria-modal="true" aria-label="Command & Bookmark Palette">
     <!-- Header: Mode Switcher & Search Input -->
     <header class="palette-header">
-      <div class="palette-modes" role="tablist" aria-label="Palette Modes">
+      <div class="palette-modes" role="tablist" aria-label="Palette Modes" style="display: none;">
         <button type="button" class="mode-tab is-active" id="modeCmdBtn" role="tab" aria-selected="true" aria-controls="cmdPanel">
           <span class="mode-icon icon-slot" id="modeCmdIcon"></span>
           <span class="mode-label" id="modeCmdText">Commands</span>
@@ -145,6 +145,7 @@
               <input type="hidden" id="captureGroupId" value="">
               <div id="groupSuggestionsList" class="group-suggestions-list" role="listbox" style="display: none;"></div>
             </div>
+            <p id="groupValidationHint" class="form-hint-error" style="display: none;"></p>
           </div>
 
           <!-- Tag / Badge Selection -->
