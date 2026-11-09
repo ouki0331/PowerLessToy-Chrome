@@ -62,6 +62,7 @@ export function setPopoverAriaState(elements, activeBtn = null) {
   const buttons = [
     elements?.bgCategoryBtn,
     elements?.bgFreqBtn,
+    elements?.bgOpacityBtn,
     elements?.bgInfoBtn,
     elements?.bgSettingsBtn,
     elements?.bgToggleTrigger,
@@ -87,6 +88,9 @@ export async function initBackgroundUI(elements, openModalFn, closeModalFn) {
   renderSvgIcon(elements.bgLockBtn?.querySelector(".icon-slot"), SVG_ICONS.unlock);
   renderSvgIcon(elements.bgCategoryBtn?.querySelector(".icon-slot"), SVG_ICONS.categoryGrid);
   renderSvgIcon(elements.bgFreqBtn?.querySelector(".icon-slot"), SVG_ICONS.frequencyClock);
+  if (elements.bgOpacityBtn?.querySelector(".icon-slot")) {
+    renderSvgIcon(elements.bgOpacityBtn.querySelector(".icon-slot"), SVG_ICONS.opacity);
+  }
   renderSvgIcon(elements.bgInfoBtn?.querySelector(".icon-slot"), SVG_ICONS.infoCircle);
   renderSvgIcon(elements.bgSettingsBtn?.querySelector(".icon-slot"), SVG_ICONS.settings);
   renderSvgIcon(elements.bgDockTrigger?.querySelector(".icon-slot"), SVG_ICONS.dockCenter);
@@ -227,6 +231,15 @@ export async function initBackgroundUI(elements, openModalFn, closeModalFn) {
     }
   });
 
+  elements.bgOpacityBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (activePopoverType === "opacity") {
+      closeBgPopover(elements);
+    } else {
+      openOpacityPopover(elements);
+    }
+  });
+
   elements.bgInfoBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
     if (activePopoverType === "info") {
@@ -238,10 +251,6 @@ export async function initBackgroundUI(elements, openModalFn, closeModalFn) {
 
   elements.bgSettingsBtn?.addEventListener("click", () => {
     closeBgPopover(elements);
-    openBgSettingsModal(elements, openModalFn, closeModalFn);
-  });
-
-  elements.bgToggleTrigger?.addEventListener("click", () => {
     openBgSettingsModal(elements, openModalFn, closeModalFn);
   });
 
@@ -556,6 +565,90 @@ export async function openFrequencyPopover(elements) {
 
     popover.appendChild(item);
   }
+
+  elements.bgPopoverContainer.appendChild(popover);
+  elements.bgPopoverContainer.style.display = "block";
+}
+
+/**
+ * Opens Opacity Adjustment Popover (UI-ACTION-001)
+ */
+export async function openOpacityPopover(elements) {
+  if (!elements?.bgPopoverContainer) return;
+  closeBgPopover(elements);
+  activePopoverType = "opacity";
+  setPopoverAriaState(elements, elements?.bgOpacityBtn);
+
+  const config = await getBgConfig();
+  const currentOpacity = config.opacity !== undefined ? config.opacity : 35;
+
+  const popover = document.createElement("div");
+  popover.className = "bg-popover bg-opacity-popover";
+  popover.setAttribute("role", "dialog");
+  popover.setAttribute("aria-label", t("bgOpacityLabel"));
+
+  const header = document.createElement("div");
+  header.className = "bg-popover-header";
+  header.textContent = `${t("bgOpacityLabel")} (${currentOpacity}%)`;
+  popover.appendChild(header);
+
+  const sliderWrap = document.createElement("div");
+  sliderWrap.className = "bg-opacity-slider-wrap";
+  sliderWrap.style.padding = "10px 14px";
+  sliderWrap.style.display = "flex";
+  sliderWrap.style.flexDirection = "column";
+  sliderWrap.style.gap = "8px";
+
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.min = "5";
+  slider.max = "100";
+  slider.value = String(currentOpacity);
+  slider.className = "bg-opacity-range";
+  slider.style.width = "100%";
+  slider.style.cursor = "pointer";
+
+  slider.addEventListener("input", (e) => {
+    const val = Number(e.target.value);
+    header.textContent = `${t("bgOpacityLabel")} (${val}%)`;
+    if (typeof document !== "undefined") {
+      document.documentElement.style.setProperty("--bg-image-opacity", String(val / 100));
+    }
+  });
+
+  slider.addEventListener("change", async (e) => {
+    const val = Number(e.target.value);
+    await saveBgConfig({ opacity: val });
+  });
+
+  sliderWrap.appendChild(slider);
+
+  // Quick preset pills
+  const presetsRow = document.createElement("div");
+  presetsRow.style.display = "flex";
+  presetsRow.style.justifyContent = "space-between";
+  presetsRow.style.gap = "4px";
+
+  [15, 35, 60, 85].forEach((pct) => {
+    const pill = document.createElement("button");
+    pill.type = "button";
+    pill.className = "btn btn-ghost btn-sm";
+    pill.style.fontSize = "11px";
+    pill.style.padding = "2px 6px";
+    pill.textContent = `${pct}%`;
+    pill.addEventListener("click", async () => {
+      slider.value = String(pct);
+      header.textContent = `${t("bgOpacityLabel")} (${pct}%)`;
+      if (typeof document !== "undefined") {
+        document.documentElement.style.setProperty("--bg-image-opacity", String(pct / 100));
+      }
+      await saveBgConfig({ opacity: pct });
+    });
+    presetsRow.appendChild(pill);
+  });
+  sliderWrap.appendChild(presetsRow);
+
+  popover.appendChild(sliderWrap);
 
   elements.bgPopoverContainer.appendChild(popover);
   elements.bgPopoverContainer.style.display = "block";

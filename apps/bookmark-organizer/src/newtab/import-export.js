@@ -992,5 +992,179 @@ export function getBackupFilename(date = new Date()) {
   const day = pad(date.getDate());
   const hours = pad(date.getHours());
   const mins = pad(date.getMinutes());
-  return `bookmark-organizer-backup-${year}-${month}-${day}-${hours}${mins}.json`;
+  return `powerless-toy-bookmarks-${year}-${month}-${day}-${hours}${mins}.json`;
+}
+
+/**
+ * Normalize badge/tag for Netscape Bookmark HTML export (DATA-EXPORT-002):
+ * - Trim whitespace
+ * - Uppercase Latin letters
+ * - Preserve numbers, spaces, hyphens
+ * - Replace '|' with space to preserve TAG | Title structure
+ * - Preserve CJK / non-Latin characters as-is
+ */
+export function normalizeTagForHtml(badge) {
+  if (!badge || typeof badge !== "string") return "";
+  let tag = badge.trim();
+  if (!tag) return "";
+  tag = tag.replace(/\|+/g, " ");
+  tag = tag.replace(/\s+/g, " ");
+  tag = tag.toUpperCase();
+  return tag.trim();
+}
+
+/**
+ * Escape HTML characters for Netscape Bookmark HTML export.
+ */
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Generate selective backup JSON adhering to formatVersion: 1 (DATA-EXPORT-002).
+ * Only includes selected categories and their descendant groups and links.
+ */
+export function generateSelectiveBackupJson(
+  { categories = [], groups = [], links = [] },
+  selectedCategoryIds,
+  { includeHidden = true } = {}
+) {
+  const selectedCatSet = new Set(Array.isArray(selectedCategoryIds) ? selectedCategoryIds : []);
+  if (selectedCatSet.size === 0) {
+    throw new Error("At least one category must be selected for export.");
+  }
+
+  const filteredCategories = categories.filter((c) => c && selectedCatSet.has(c.id));
+  const filteredCatIds = new Set(filteredCategories.map((c) => c.id));
+
+  const filteredGroups = groups.filter((g) => g && filteredCatIds.has(g.categoryId));
+  const filteredGroupIds = new Set(filteredGroups.map((g) => g.id));
+
+  const filteredLinks = links.filter((l) => {
+    if (!l || !filteredGroupIds.has(l.groupId)) return false;
+    if (!includeHidden && l.hidden === true) return false;
+    return true;
+  });
+
+  return generateBackupJson({
+    categories: filteredCategories,
+    groups: filteredGroups,
+    links: filteredLinks
+  });
+}
+
+/**
+ * Generate Netscape Bookmark HTML format for browser bookmark compatibility (DATA-EXPORT-002).
+ * Hierarchy: PowerLessToy Export -> Category -> Group -> Bookmark.
+ * Link title format: "TAG | Title" or "Title".
+ * Excludes hidden bookmarks by default unless includeHidden === true.
+ */
+export function generateNetscapeBookmarkHtml(
+  { categories = [], groups = [], links = [] },
+  selectedCategoryIds,
+  { includeHidden = false } = {}
+) {
+  const selectedCatSet = new Set(Array.isArray(selectedCategoryIds) ? selectedCategoryIds : []);
+  if (selectedCatSet.size === 0) {
+    throw new Error("At least one category must be selected for export.");
+  }
+
+  const byCreated = (a, b) => (a.createdAt || 0) - (b.createdAt || 0);
+  const bySortOrder = (a, b) => (a.sortOrder ?? a.createdAt ?? 0) - (b.sortOrder ?? b.createdAt ?? 0);
+
+  const filteredCategories = categories.filter((c) => c && selectedCatSet.has(c.id)).sort(byCreated);
+  const filteredCatIds = new Set(filteredCategories.map((c) => c.id));
+
+  const groupsByCat = new Map();
+  for (const g of groups) {
+    if (!g || !filteredCatIds.has(g.categoryId)) continue;
+    if (!groupsByCat.has(g.categoryId)) groupsByCat.set(g.categoryId, []);
+    groupsByCat.get(g.categoryId).push(g);
+  }
+
+  const linksByGroup = new Map();
+  for (const l of links) {
+    if (!l) continue;
+    if (!includeHidden && l.hidden === true) continue;
+    if (!linksByGroup.has(l.groupId)) linksByGroup.set(l.groupId, []);
+    linksByGroup.get(l.groupId).push(l);
+  }
+
+  const lines = [
+    "<!DOCTYPE NETSCAPE-Bookmark-file-1>",
+    "<!-- This is an automatically generated file.",
+    "     It will be read and overwritten.",
+    "     DO NOT EDIT! -->",
+    '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',
+    "<TITLE>Bookmarks</TITLE>",
+    "<H1>Bookmarks</H1>",
+    "<DL><p>",
+    '    <DT><H3 FOLDED ADD_DATE="' + Math.floor(Date.now() / 1000) + '">PowerLessToy Export</H3>',
+    "    <DL><p>"
+  ];
+
+  for (const cat of filteredCategories) {
+    const catDate = Math.floor((cat.createdAt || Date.now()) / 1000);
+    lines.push(`        <DT><H3 FOLDED ADD_DATE="${catDate}">${escapeHtml(cat.name)}</H3>`);
+    lines.push("        <DL><p>");
+
+    const catGroups = (groupsByCat.get(cat.id) || []).sort(bySortOrder);
+    for (const grp of catGroups) {
+      const grpDate = Math.floor((grp.createdAt || Date.now()) / 1000);
+      lines.push(`            <DT><H3 FOLDED ADD_DATE="${grpDate}">${escapeHtml(grp.name)}</H3>`);
+      lines.push("            <DL><p>");
+
+      const grpLinks = (linksByGroup.get(grp.id) || []).sort(byCreated);
+      for (const lnk of grpLinks) {
+        const lnkDate = Math.floor((lnk.createdAt || Date.now()) / 1000);
+        const normTag = normalizeTagForHtml(lnk.badge);
+        const rawTitle = lnk.name || "Untitled Bookmark";
+        const formattedTitle = normTag ? `${normTag} | ${rawTitle}` : rawTitle;
+        const safeUrl = escapeHtml(lnk.url);
+        const safeTitle = escapeHtml(formattedTitle);
+        lines.push(`                <DT><A HREF="${safeUrl}" ADD_DATE="${lnkDate}">${safeTitle}</A>`);
+      }
+
+      lines.push("            </DL><p>");
+    }
+
+    lines.push("        </DL><p>");
+  }
+
+  lines.push("    </DL><p>");
+  lines.push("</DL><p>");
+  lines.push("");
+
+  return lines.join("\n");
+}
+
+/**
+ * Generate date-time formatted filename for selective backup export (DATA-EXPORT-002)
+ */
+export function getSelectiveBackupFilename({
+  format = "json",
+  selectedCategoryNames = [],
+  date = new Date()
+} = {}) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const mins = pad(date.getMinutes());
+  const dateStr = `${year}-${month}-${day}-${hours}${mins}`;
+  const ext = format === "html" ? "html" : "json";
+
+  if (Array.isArray(selectedCategoryNames) && selectedCategoryNames.length === 1) {
+    const safeName = String(selectedCategoryNames[0] || "")
+      .trim()
+      .replace(/[^\w\u4e00-\u9fa5\u3040-\u30ff\u3400-\u4dbf-]+/g, "_")
+      .slice(0, 30);
+    return `powerless-toy-bookmarks-${safeName || "tab"}-${dateStr}.${ext}`;
+  }
+  return `powerless-toy-bookmarks-${dateStr}.${ext}`;
 }

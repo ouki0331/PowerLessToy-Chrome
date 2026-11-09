@@ -294,6 +294,30 @@ export const SVG_ICONS = {
     <circle cx="15" cy="12" r="1.5" fill="currentColor"></circle>
     <circle cx="9" cy="18" r="1.5" fill="currentColor"></circle>
     <circle cx="15" cy="18" r="1.5" fill="currentColor"></circle>
+  </svg>`,
+
+  // More (···): Three horizontal dots (UI-ACTION-001)
+  moreHorizontal: `<svg class="ui-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="1.5" fill="currentColor"></circle>
+    <circle cx="19" cy="12" r="1.5" fill="currentColor"></circle>
+    <circle cx="5" cy="12" r="1.5" fill="currentColor"></circle>
+  </svg>`,
+
+  // Command Palette symbol
+  command: `<svg class="ui-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3H6a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 3 3 0 0 0-3-3z"></path>
+  </svg>`,
+
+  // Tag / Badge icon
+  tag: `<svg class="ui-icon ui-icon-compact" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+    <line x1="7" y1="7" x2="7.01" y2="7"></line>
+  </svg>`,
+
+  // Opacity / Scrim Slider
+  opacity: `<svg class="ui-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="10"></circle>
+    <path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor"></path>
   </svg>`
 };
 

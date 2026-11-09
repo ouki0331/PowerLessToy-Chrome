@@ -216,7 +216,65 @@ const translations = {
     hideHiddenTitle: "Hide private bookmarks again",
 
     // Scoped Pinned Shelf (BMK-PIN-002)
-    pinnedEmptyEnvHint: (env) => `No pinned bookmarks in this tab match "${env}".`
+    pinnedEmptyEnvHint: (env) => `No pinned bookmarks in this tab match "${env}".`,
+
+    // UI Action Consolidation (UI-ACTION-001)
+    moreActionsBtn: "More Actions",
+    moreManageBookmarks: "Manage Bookmarks",
+    moreImportJson: "Import Bookmarks (JSON)",
+    moreExportBookmarks: "Export Bookmarks",
+    moreShortcuts: "Extension Shortcuts",
+    moreLanguage: "Language: EN / JA",
+
+    // Selective Export (DATA-EXPORT-002)
+    exportModalTitle: "Export Bookmarks",
+    exportTabsHeader: "Select Tabs to Export",
+    exportFormatHeader: "Export Format",
+    exportFormatJson: "PowerLessToy JSON (Full backup)",
+    exportFormatHtml: "Browser Bookmarks HTML (Netscape format)",
+    exportSelectAll: "Select All",
+    exportDeselectAll: "Deselect All",
+    exportCurrentTabOnly: "Current Tab Only",
+    exportMinOneTab: "Please select at least one tab to export.",
+    exportIncludeHidden: "Include hidden bookmarks",
+    exportHiddenNotice: "Hidden bookmarks are not encrypted and will be visible in the exported file.",
+    exportHtmlDisclaimer: "Note: Netscape HTML does not preserve custom group ordering, pin states, or hidden flags.",
+    exportConfirmBtn: "Download Export",
+    tabGroupLinkCount: (groups, links) => `${groups} group(s), ${links} link(s)`,
+
+    // Global Palette & Quick Capture (CMD-SEARCH-001 & BMK-CAPTURE-001)
+    cmdModeLabel: "Commands",
+    bmkModeLabel: "Bookmarks",
+    cmdCaptureTitle: "Capture Current Page",
+    cmdCaptureDesc: "Quickly bookmark the active browser tab",
+    cmdWorkbenchTitle: "Open Workbench",
+    cmdWorkbenchDesc: "Open Bookmark Organizer in a new tab",
+    cmdSearchTitle: "Search Bookmarks",
+    cmdSearchDesc: "Find links across all categories and tags",
+    cmdTogglePrivateTitle: "Toggle Private Bookmarks",
+    cmdTogglePrivateDesc: "Show or hide private/hidden items",
+    cmdImportTitle: "Import Bookmarks",
+    cmdImportDesc: "Import from JSON backup file",
+    cmdExportTitle: "Export Bookmarks",
+    cmdExportDesc: "Export selected tabs to JSON or HTML",
+    captureRestrictedTitle: "Capture Unavailable",
+    captureRestrictedDesc: "Browser system pages, web store, and local files cannot be captured directly.",
+    captureGroupLabel: "Target Group",
+    captureGroupPlaceholder: "Search group by name, tab, or existing link...",
+    captureCleanUrlToggle: "Clean tracking parameters",
+    captureRevertUrl: "Revert to original URL",
+    captureTitleSuggestions: "Suggested titles:",
+    captureDuplicateNotice: "This URL is already bookmarked in:",
+    captureOpenExisting: "Open Existing",
+    captureEditExisting: "Edit in Workbench",
+    captureSaveBtn: "Save Bookmark",
+    captureSavedToast: "Bookmark saved successfully!",
+    tabFilterAll: "All Tabs",
+    tagFilterAll: "All Tags",
+    clearFilters: "Clear Filters",
+    paletteInputPlaceholder: "Search bookmarks or type commands (Ctrl/Cmd+K to switch)...",
+    paletteFooterNavHint: "↑↓ Select · Enter Open / Run · Ctrl/⌘+Enter New Tab · Esc Close",
+    noCommandsMatch: "No matching commands found"
   },
   ja: {
     appTitle: "Bookmark Organizer",
@@ -430,7 +488,65 @@ const translations = {
     hideHiddenTitle: "非表示ブックマークを再度隠す",
 
     // Scoped Pinned Shelf (BMK-PIN-002)
-    pinnedEmptyEnvHint: (env) => `このタブには「${env}」に一致するピン留めがありません。`
+    pinnedEmptyEnvHint: (env) => `このタブには「${env}」に一致するピン留めがありません。`,
+
+    // UI Action Consolidation (UI-ACTION-001)
+    moreActionsBtn: "その他の操作",
+    moreManageBookmarks: "ブックマークの管理",
+    moreImportJson: "ブックマークのインポート (JSON)",
+    moreExportBookmarks: "ブックマークのエクスポート",
+    moreShortcuts: "拡張機能のショートカット",
+    moreLanguage: "言語: EN / JA",
+
+    // Selective Export (DATA-EXPORT-002)
+    exportModalTitle: "ブックマークのエクスポート",
+    exportTabsHeader: "エクスポートするタブを選択",
+    exportFormatHeader: "エクスポート形式",
+    exportFormatJson: "PowerLessToy JSON（完全バックアップ）",
+    exportFormatHtml: "ブラウザ標準ブックマーク HTML（Netscape形式）",
+    exportSelectAll: "すべて選択",
+    exportDeselectAll: "すべて解除",
+    exportCurrentTabOnly: "現在のタブのみ",
+    exportMinOneTab: "エクスポートするタブを少なくとも1つ選択してください。",
+    exportIncludeHidden: "非表示ブックマークを含める",
+    exportHiddenNotice: "非表示ブックマークは暗号化されておらず、エクスポートファイル内で表示可能になります。",
+    exportHtmlDisclaimer: "注意: Netscape HTML 形式では、カスタムグループ順序、ピン留め状態、非表示フラグは保持されません。",
+    exportConfirmBtn: "エクスポートファイルをダウンロード",
+    tabGroupLinkCount: (groups, links) => `${groups} グループ, ${links} 件`,
+
+    // Global Palette & Quick Capture (CMD-SEARCH-001 & BMK-CAPTURE-001)
+    cmdModeLabel: "コマンド",
+    bmkModeLabel: "ブックマーク",
+    cmdCaptureTitle: "現在のページを保存",
+    cmdCaptureDesc: "アクティブなタブをすばやくブックマークに登録",
+    cmdWorkbenchTitle: "ワークベンチを開く",
+    cmdWorkbenchDesc: "新しいタブで Bookmark Organizer を開く",
+    cmdSearchTitle: "ブックマークを検索",
+    cmdSearchDesc: "すべてのカテゴリとタグからリンクを検索",
+    cmdTogglePrivateTitle: "非表示ブックマークの切り替え",
+    cmdTogglePrivateDesc: "非表示アイテムのロック/ロック解除を切り替え",
+    cmdImportTitle: "ブックマークのインポート",
+    cmdImportDesc: "JSON バックアップファイルからインポート",
+    cmdExportTitle: "ブックマークのエクスポート",
+    cmdExportDesc: "選択したタブを JSON または HTML でエクスポート",
+    captureRestrictedTitle: "保存できません",
+    captureRestrictedDesc: "ブラウザのシステムページ、ストア、ローカルファイルは直接保存できません。",
+    captureGroupLabel: "保存先グループ",
+    captureGroupPlaceholder: "グループ名、タブ、または既存リンクで検索...",
+    captureCleanUrlToggle: "トラッキングパラメータを除去",
+    captureRevertUrl: "元の URL に戻す",
+    captureTitleSuggestions: "候補タイトル:",
+    captureDuplicateNotice: "この URL は既に次の場所に登録されています:",
+    captureOpenExisting: "既存を開く",
+    captureEditExisting: "ワークベンチで編集",
+    captureSaveBtn: "ブックマークを保存",
+    captureSavedToast: "ブックマークを保存しました！",
+    tabFilterAll: "すべてのタブ",
+    tagFilterAll: "すべてのタグ",
+    clearFilters: "フィルタをクリア",
+    paletteInputPlaceholder: "ブックマークを検索またはコマンドを入力 (Ctrl/Cmd+K で切替)...",
+    paletteFooterNavHint: "↑↓ 選択 · Enter 開く/実行 · Ctrl/⌘+Enter 新規タブ · Esc 閉じる",
+    noCommandsMatch: "一致するコマンドが見つかりません"
   }
 };
 

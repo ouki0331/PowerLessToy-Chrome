@@ -44,7 +44,10 @@ import {
   previewSnapshotRestore,
   restoreSnapshot,
   exportBackup,
-  getBackupFilename
+  getBackupFilename,
+  generateSelectiveBackupJson,
+  generateNetscapeBookmarkHtml,
+  getSelectiveBackupFilename
 } from "./import-export.js";
 
 import {
@@ -143,6 +146,19 @@ const elements = {
   get errorDesc() { return el("errorDesc"); },
   get retryLoadBtn() { return el("retryLoadBtn"); },
   get modalContainer() { return el("modalContainer"); },
+
+  // Consolidated Actions & More Menu (UI-ACTION-001)
+  get moreMenuWrapper() { return el("moreMenuWrapper"); },
+  get moreMenuBtn() { return el("moreMenuBtn"); },
+  get moreMenuIcon() { return el("moreMenuIcon"); },
+  get moreMenuDropdown() { return el("moreMenuDropdown"); },
+  get headerAddGroupBtn() { return el("headerAddGroupBtn"); },
+  get shortcutsBtn() { return el("shortcutsBtn"); },
+  get shortcutsBtnIcon() { return el("shortcutsBtnIcon"); },
+  get shortcutsBtnText() { return el("shortcutsBtnText"); },
+  get dockThemeBtn() { return el("dockThemeBtn"); },
+  get dockThemeBtnIcon() { return el("dockThemeBtnIcon"); },
+  get bgOpacityBtn() { return el("bgOpacityBtn"); },
 
   // Import / Export Elements
   get importJsonBtn() { return el("importJsonBtn"); },
@@ -244,6 +260,14 @@ async function bootstrapApp() {
   initStaticIcons();
   await initWorkbench();
   await initBackgroundUI(elements, openModal, closeModal);
+
+  if (typeof window !== "undefined" && window.location?.hash) {
+    if (window.location.hash === "#export") {
+      setTimeout(() => openExportModal(), 100);
+    } else if (window.location.hash === "#import") {
+      setTimeout(() => elements.importFileInput?.click(), 100);
+    }
+  }
 }
 
 if (typeof document !== "undefined" && document.addEventListener) {
@@ -328,6 +352,12 @@ function initStaticIcons() {
   if (elements.searchBtnIcon) renderSvgIcon(elements.searchBtnIcon, FEATURE_ICONS.search);
   if (elements.searchModalIcon) renderSvgIcon(elements.searchModalIcon, FEATURE_ICONS.search);
   if (elements.closeSearchIcon) renderSvgIcon(elements.closeSearchIcon, SVG_ICONS.close);
+
+  if (elements.moreMenuIcon) renderSvgIcon(elements.moreMenuIcon, SVG_ICONS.moreHorizontal);
+  const headerAddGrpIcon = elements.headerAddGroupBtn?.querySelector(".icon-slot");
+  if (headerAddGrpIcon) renderSvgIcon(headerAddGrpIcon, SVG_ICONS.circlePlus);
+  if (elements.shortcutsBtnIcon) renderSvgIcon(elements.shortcutsBtnIcon, SVG_ICONS.settings);
+
   updatePrivacyToggleUI();
   updateEnvFilterUI();
 }
@@ -435,8 +465,74 @@ function setupStorageSubscription() {
 }
 
 function setupEventListeners() {
+  // More Actions Menu (UI-ACTION-001)
+  function closeMoreMenu() {
+    if (elements.moreMenuDropdown) {
+      elements.moreMenuDropdown.style.display = "none";
+      elements.moreMenuBtn?.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function openMoreMenu() {
+    if (elements.moreMenuDropdown) {
+      elements.moreMenuDropdown.style.display = "block";
+      elements.moreMenuBtn?.setAttribute("aria-expanded", "true");
+    }
+  }
+
+  elements.moreMenuBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = elements.moreMenuDropdown?.style.display === "block";
+    if (isOpen) {
+      closeMoreMenu();
+    } else {
+      openMoreMenu();
+    }
+  });
+
+  if (typeof document !== "undefined") {
+    document.addEventListener("click", (e) => {
+      if (
+        elements.moreMenuWrapper &&
+        !elements.moreMenuWrapper.contains(e.target) &&
+        elements.moreMenuDropdown?.style.display === "block"
+      ) {
+        closeMoreMenu();
+      }
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && elements.moreMenuDropdown?.style.display === "block") {
+        closeMoreMenu();
+        elements.moreMenuBtn?.focus();
+      }
+    });
+  }
+
+  // Header Add Group Action (UI-ACTION-001)
+  elements.headerAddGroupBtn?.addEventListener("click", () => {
+    const activeCat = getActiveCategory();
+    if (activeCat) openAddGroupModal(activeCat.id);
+  });
+
+  // Dock Theme Button (UI-ACTION-001)
+  elements.dockThemeBtn?.addEventListener("click", () => {
+    openThemeModal();
+  });
+
+  // Shortcuts Button
+  elements.shortcutsBtn?.addEventListener("click", () => {
+    closeMoreMenu();
+    if (typeof chrome !== "undefined" && chrome.tabs?.create) {
+      chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
+    } else {
+      alert(t("searchShortcutNotice"));
+    }
+  });
+
   // Toggle Language
   elements.langToggleBtn?.addEventListener("click", () => {
+    closeMoreMenu();
     const nextLang = getLanguage() === "en" ? "ja" : "en";
     setLanguage(nextLang);
     localStorage.setItem("powerless_toy_lang", nextLang);
@@ -446,6 +542,7 @@ function setupEventListeners() {
 
   // Toggle Manage Mode
   elements.toggleManageBtn?.addEventListener("click", () => {
+    closeMoreMenu();
     state.isManageMode = !state.isManageMode;
     elements.toggleManageBtn.setAttribute("aria-pressed", state.isManageMode ? "true" : "false");
     elements.manageIndicator.style.display = state.isManageMode ? "inline-block" : "none";
@@ -460,11 +557,13 @@ function setupEventListeners() {
 
   // Export Backup Button
   elements.exportBackupBtn?.addEventListener("click", () => {
+    closeMoreMenu();
     handleExportBackup();
   });
 
   // Import JSON Button
   elements.importJsonBtn?.addEventListener("click", () => {
+    closeMoreMenu();
     elements.importFileInput.value = "";
     elements.importFileInput.click();
   });
@@ -648,7 +747,6 @@ async function handleSortToggle(mode) {
 // ==========================================================================
 
 function updateThemeButtonUI() {
-  if (!elements.themeToggleBtn) return;
   const mode = getThemeMode();
   const resolved = getResolvedTheme();
   const autoInfo = getAutoInfo();
@@ -689,7 +787,14 @@ function updateThemeButtonUI() {
 
   if (elements.themeBtnIcon) renderSvgIcon(elements.themeBtnIcon, icon);
   if (elements.themeBtnText) elements.themeBtnText.textContent = text;
-  elements.themeToggleBtn.title = tooltip;
+  if (elements.themeToggleBtn) elements.themeToggleBtn.title = tooltip;
+
+  if (elements.dockThemeBtn) {
+    elements.dockThemeBtn.title = tooltip;
+    elements.dockThemeBtn.setAttribute("aria-label", tooltip);
+    const dockIconSlot = elements.dockThemeBtnIcon || elements.dockThemeBtn.querySelector(".icon-slot");
+    if (dockIconSlot) renderSvgIcon(dockIconSlot, icon);
+  }
 }
 
 function openThemeModal() {
@@ -800,27 +905,248 @@ function showThemeNotice(message) {
 }
 
 // ==========================================================================
-// Backup Export & Import Handlers
+// Backup Export & Import Handlers (DATA-EXPORT-002)
 // ==========================================================================
 
-async function handleExportBackup() {
+async function openExportModal() {
   try {
-    // Always read fresh from IndexedDB so another tab's edits are never missed
-    const backupObj = await exportBackup();
+    const latestData = await loadWorkbenchData();
+    const categories = Array.isArray(latestData?.categories) ? latestData.categories : [];
+    const groups = Array.isArray(latestData?.groups) ? latestData.groups : [];
+    const links = Array.isArray(latestData?.links) ? latestData.links : [];
 
-    const jsonStr = JSON.stringify(backupObj, null, 2);
-    const blob = new Blob([jsonStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = getBackupFilename();
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const container = document.createElement("div");
+    container.className = "selective-export-modal";
+
+    // Section 1: Tab Selection
+    const tabsSection = document.createElement("div");
+    tabsSection.className = "export-section";
+
+    const tabsHeaderRow = document.createElement("div");
+    tabsHeaderRow.className = "export-section-header-row";
+
+    const tabsTitle = document.createElement("h4");
+    tabsTitle.className = "export-section-title";
+    tabsTitle.textContent = t("exportTabsHeader");
+    tabsHeaderRow.appendChild(tabsTitle);
+
+    const quickActions = document.createElement("div");
+    quickActions.className = "export-quick-actions";
+
+    const selectAllBtn = document.createElement("button");
+    selectAllBtn.type = "button";
+    selectAllBtn.className = "btn btn-ghost btn-sm";
+    selectAllBtn.textContent = t("exportSelectAll");
+
+    const deselectAllBtn = document.createElement("button");
+    deselectAllBtn.type = "button";
+    deselectAllBtn.className = "btn btn-ghost btn-sm";
+    deselectAllBtn.textContent = t("exportDeselectAll");
+
+    const currentTabOnlyBtn = document.createElement("button");
+    currentTabOnlyBtn.type = "button";
+    currentTabOnlyBtn.className = "btn btn-ghost btn-sm";
+    currentTabOnlyBtn.textContent = t("exportCurrentTabOnly");
+
+    quickActions.appendChild(selectAllBtn);
+    quickActions.appendChild(deselectAllBtn);
+    quickActions.appendChild(currentTabOnlyBtn);
+    tabsHeaderRow.appendChild(quickActions);
+    tabsSection.appendChild(tabsHeaderRow);
+
+    const tabsList = document.createElement("div");
+    tabsList.className = "export-tabs-list";
+
+    const checkboxes = [];
+    categories.forEach((cat) => {
+      const catGroups = groups.filter((g) => g.categoryId === cat.id);
+      const catGroupIds = new Set(catGroups.map((g) => g.id));
+      const catLinks = links.filter((l) => catGroupIds.has(l.groupId));
+
+      const itemLabel = document.createElement("label");
+      itemLabel.className = "export-tab-item";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.value = cat.id;
+      cb.checked = true;
+      cb.dataset.catName = cat.name;
+      checkboxes.push(cb);
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "export-tab-name";
+      nameSpan.textContent = cat.name;
+
+      const countBadge = document.createElement("span");
+      countBadge.className = "export-tab-badge";
+      countBadge.textContent = t("tabGroupLinkCount", catGroups.length, catLinks.length);
+
+      itemLabel.appendChild(cb);
+      itemLabel.appendChild(nameSpan);
+      itemLabel.appendChild(countBadge);
+      tabsList.appendChild(itemLabel);
+    });
+    tabsSection.appendChild(tabsList);
+
+    const validationMsg = document.createElement("div");
+    validationMsg.className = "export-validation-msg";
+    validationMsg.style.display = "none";
+    validationMsg.textContent = t("exportMinOneTab");
+    tabsSection.appendChild(validationMsg);
+    container.appendChild(tabsSection);
+
+    // Section 2: Format Selection
+    const formatSection = document.createElement("div");
+    formatSection.className = "export-section";
+
+    const formatTitle = document.createElement("h4");
+    formatTitle.className = "export-section-title";
+    formatTitle.textContent = t("exportFormatHeader");
+    formatSection.appendChild(formatTitle);
+
+    const formatOptions = document.createElement("div");
+    formatOptions.className = "export-format-options";
+
+    const jsonLabel = document.createElement("label");
+    jsonLabel.className = "export-format-item";
+    const jsonRadio = document.createElement("input");
+    jsonRadio.type = "radio";
+    jsonRadio.name = "exportFormat";
+    jsonRadio.value = "json";
+    jsonRadio.checked = true;
+    const jsonText = document.createElement("span");
+    jsonText.textContent = t("exportFormatJson");
+    jsonLabel.appendChild(jsonRadio);
+    jsonLabel.appendChild(jsonText);
+
+    const htmlLabel = document.createElement("label");
+    htmlLabel.className = "export-format-item";
+    const htmlRadio = document.createElement("input");
+    htmlRadio.type = "radio";
+    htmlRadio.name = "exportFormat";
+    htmlRadio.value = "html";
+    const htmlText = document.createElement("span");
+    htmlText.textContent = t("exportFormatHtml");
+    htmlLabel.appendChild(htmlRadio);
+    htmlLabel.appendChild(htmlText);
+
+    formatOptions.appendChild(jsonLabel);
+    formatOptions.appendChild(htmlLabel);
+    formatSection.appendChild(formatOptions);
+    container.appendChild(formatSection);
+
+    // Section 3: Privacy & Disclaimers
+    const optionsSection = document.createElement("div");
+    optionsSection.className = "export-section";
+
+    const hiddenLabel = document.createElement("label");
+    hiddenLabel.className = "export-option-item";
+    const hiddenCb = document.createElement("input");
+    hiddenCb.type = "checkbox";
+    hiddenCb.id = "exportIncludeHiddenCheckbox";
+    hiddenCb.checked = true; // Default true for JSON
+    const hiddenText = document.createElement("span");
+    hiddenText.textContent = t("exportIncludeHidden");
+    hiddenLabel.appendChild(hiddenCb);
+    hiddenLabel.appendChild(hiddenText);
+    optionsSection.appendChild(hiddenLabel);
+
+    const disclaimerNote = document.createElement("div");
+    disclaimerNote.className = "export-disclaimer-note";
+    disclaimerNote.textContent = t("exportHiddenNotice");
+    optionsSection.appendChild(disclaimerNote);
+    container.appendChild(optionsSection);
+
+    function updateState() {
+      const checkedCount = checkboxes.filter((c) => c.checked).length;
+      const confirmBtn = document.querySelector(".modal-confirm-btn");
+      if (checkedCount === 0) {
+        validationMsg.style.display = "block";
+        if (confirmBtn) confirmBtn.disabled = true;
+      } else {
+        validationMsg.style.display = "none";
+        if (confirmBtn) confirmBtn.disabled = false;
+      }
+
+      const isHtml = htmlRadio.checked;
+      if (isHtml) {
+        disclaimerNote.textContent = `${t("exportHtmlDisclaimer")} ${t("exportHiddenNotice")}`;
+      } else {
+        disclaimerNote.textContent = t("exportHiddenNotice");
+      }
+    }
+
+    checkboxes.forEach((cb) => cb.addEventListener("change", updateState));
+    jsonRadio.addEventListener("change", () => {
+      hiddenCb.checked = true;
+      updateState();
+    });
+    htmlRadio.addEventListener("change", () => {
+      hiddenCb.checked = false;
+      updateState();
+    });
+
+    selectAllBtn.addEventListener("click", () => {
+      checkboxes.forEach((c) => (c.checked = true));
+      updateState();
+    });
+
+    deselectAllBtn.addEventListener("click", () => {
+      checkboxes.forEach((c) => (c.checked = false));
+      updateState();
+    });
+
+    currentTabOnlyBtn.addEventListener("click", () => {
+      checkboxes.forEach((c) => (c.checked = c.value === state.activeCategoryId));
+      updateState();
+    });
+
+    openModal(
+      t("exportModalTitle"),
+      container,
+      async () => {
+        const selectedIds = checkboxes.filter((c) => c.checked).map((c) => c.value);
+        if (selectedIds.length === 0) return false;
+
+        const isHtml = htmlRadio.checked;
+        const includeHidden = hiddenCb.checked;
+        const selectedCats = categories.filter((c) => selectedIds.includes(c.id));
+        const selectedNames = selectedCats.map((c) => c.name);
+
+        let blob;
+        let filename;
+
+        if (isHtml) {
+          const htmlContent = generateNetscapeBookmarkHtml(latestData, selectedIds, { includeHidden });
+          blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+          filename = getSelectiveBackupFilename({ format: "html", selectedCategoryNames: selectedNames });
+        } else {
+          const jsonObj = generateSelectiveBackupJson(latestData, selectedIds, { includeHidden });
+          blob = new Blob([JSON.stringify(jsonObj, null, 2)], { type: "application/json" });
+          filename = getSelectiveBackupFilename({ format: "json", selectedCategoryNames: selectedNames });
+        }
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return true;
+      },
+      t("exportConfirmBtn")
+    );
+
+    updateState();
   } catch (err) {
-    alert(`Export failed: ${err.message}`);
+    alert(`Export configuration failed: ${err.message}`);
   }
+}
+
+async function handleExportBackup() {
+  await openExportModal();
 }
 
 async function handleImportFile(file) {

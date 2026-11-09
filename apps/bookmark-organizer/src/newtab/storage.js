@@ -136,6 +136,150 @@ export function isValidUrl(url) {
 }
 
 /**
+ * Tracking parameter patterns to strip for BMK-CAPTURE-001
+ */
+export const TRACKING_PARAM_PATTERNS = [
+  /^utm_/i,
+  /^gclid$/i,
+  /^dclid$/i,
+  /^fbclid$/i,
+  /^msclkid$/i,
+  /^yclid$/i,
+  /^mc_cid$/i,
+  /^mc_eid$/i
+];
+
+/**
+ * Remove tracking parameters while strictly preserving functional parameters and hash (BMK-CAPTURE-001).
+ */
+export function cleanTrackingUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== "string") return "";
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return "";
+  try {
+    const urlObj = new URL(trimmed);
+    const keysToDelete = [];
+    for (const key of urlObj.searchParams.keys()) {
+      if (TRACKING_PARAM_PATTERNS.some((pattern) => pattern.test(key))) {
+        keysToDelete.push(key);
+      }
+    }
+    for (const key of keysToDelete) {
+      urlObj.searchParams.delete(key);
+    }
+    return urlObj.toString();
+  } catch {
+    return trimmed;
+  }
+}
+
+/**
+ * Normalize a URL for duplicate detection comparison (BMK-CAPTURE-001).
+ */
+export function normalizeComparableUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== "string") return "";
+  const cleaned = cleanTrackingUrl(rawUrl);
+  try {
+    const parsed = new URL(cleaned);
+    let pathname = parsed.pathname.replace(/\/+$/, "");
+    if (!pathname) pathname = "";
+    const search = parsed.search || "";
+    const hash = parsed.hash || "";
+    return `${parsed.protocol}//${parsed.host}${pathname}${search}${hash}`.toLowerCase();
+  } catch {
+    return cleaned.toLowerCase();
+  }
+}
+
+/**
+ * Find existing duplicate bookmark for duplicate warning in capture dialog (BMK-CAPTURE-001).
+ */
+export function findDuplicateLink(data, url) {
+  if (!data || !Array.isArray(data.links) || !url) return null;
+  const targetNorm = normalizeComparableUrl(url);
+  if (!targetNorm) return null;
+
+  const found = data.links.find((l) => l && normalizeComparableUrl(l.url) === targetNorm);
+  if (!found) return null;
+
+  const group = (data.groups || []).find((g) => g.id === found.groupId) || null;
+  const category = group ? (data.categories || []).find((c) => c.id === group.categoryId) || null : null;
+
+  return {
+    link: found,
+    group,
+    category,
+    groupName: group?.name || "",
+    categoryName: category?.name || ""
+  };
+}
+
+/**
+ * Filter groups for the searchable combobox picker (BMK-CAPTURE-001).
+ * Matches Group Name, Tab Name, and existing Link Names / Domains inside the group.
+ * Sorted by recent usage first.
+ */
+export function filterGroupsForCombobox(data, query = "", recentGroupMetrics = new Map()) {
+  if (!data || !Array.isArray(data.groups)) return [];
+  const categories = data.categories || [];
+  const catMap = new Map(categories.map((c) => [c.id, c]));
+  const links = data.links || [];
+  const linksByGroup = new Map();
+  for (const l of links) {
+    if (!l) continue;
+    if (!linksByGroup.has(l.groupId)) linksByGroup.set(l.groupId, []);
+    linksByGroup.get(l.groupId).push(l);
+  }
+
+  const trimmedQuery = (query || "").trim().toLowerCase();
+  const queryTokens = trimmedQuery ? trimmedQuery.split(/\s+/).filter(Boolean) : [];
+
+  const groupItems = [];
+  for (const group of data.groups) {
+    if (!group) continue;
+    const category = catMap.get(group.categoryId);
+    const groupLinks = linksByGroup.get(group.id) || [];
+    const linkCount = groupLinks.length;
+    const metric = recentGroupMetrics.get(group.id);
+    const lastUsedAt = metric?.lastUsedAt || group.lastUsedAt || 0;
+    const usageCount = metric?.usageCount || group.usageCount || 0;
+
+    const groupNameLower = (group.name || "").toLowerCase();
+    const catNameLower = (category?.name || "").toLowerCase();
+    const linkNames = groupLinks.map((l) => (l.name || "").toLowerCase()).join(" ");
+    const linkHosts = groupLinks.map((l) => {
+      try { return new URL(l.url).hostname.toLowerCase(); } catch { return ""; }
+    }).join(" ");
+
+    const fullSearchText = `${groupNameLower} ${catNameLower} ${linkNames} ${linkHosts}`;
+    const matches = queryTokens.length === 0 || queryTokens.every((tok) => fullSearchText.includes(tok));
+
+    if (matches) {
+      groupItems.push({
+        id: group.id,
+        name: group.name,
+        categoryId: group.categoryId,
+        categoryName: category?.name || "",
+        group,
+        category,
+        linkCount,
+        lastUsedAt,
+        usageCount,
+        groupLinks
+      });
+    }
+  }
+
+  groupItems.sort((a, b) => {
+    if (b.lastUsedAt !== a.lastUsedAt) return b.lastUsedAt - a.lastUsedAt;
+    if (b.usageCount !== a.usageCount) return b.usageCount - a.usageCount;
+    return (a.group.sortOrder ?? 0) - (b.group.sortOrder ?? 0);
+  });
+
+  return groupItems;
+}
+
+/**
  * Load complete workbench data from IndexedDB.
  * Automatically runs migration from legacy chrome.storage if needed.
  * Restores last active category.

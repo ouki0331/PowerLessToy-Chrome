@@ -3,41 +3,210 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bookmark Organizer</title>
+  <title>Bookmark Organizer - Palette</title>
   <link rel="stylesheet" href="popup.css">
+  <script src="../newtab/theme-init.js"></script>
 </head>
-<body>
-  <div class="popup-container">
-    <div class="popup-header">
-      <div class="brand">
-        <span class="brand-icon">📑</span>
-        <span class="brand-title">Bookmark Organizer</span>
+<body class="palette-body">
+  <div class="palette-container" id="paletteContainer" role="dialog" aria-modal="true" aria-label="Command & Bookmark Palette">
+    <!-- Header: Mode Switcher & Search Input -->
+    <header class="palette-header">
+      <div class="palette-modes" role="tablist" aria-label="Palette Modes">
+        <button type="button" class="mode-tab is-active" id="modeCmdBtn" role="tab" aria-selected="true" aria-controls="cmdPanel">
+          <span class="mode-icon icon-slot" id="modeCmdIcon"></span>
+          <span class="mode-label" id="modeCmdText">Commands</span>
+          <kbd class="mode-kbd">⌘K</kbd>
+        </button>
+        <button type="button" class="mode-tab" id="modeBmkBtn" role="tab" aria-selected="false" aria-controls="bmkPanel">
+          <span class="mode-icon icon-slot" id="modeBmkIcon"></span>
+          <span class="mode-label" id="modeBmkText">Bookmarks</span>
+        </button>
       </div>
-      <span class="badge-tag">MVP</span>
-    </div>
-    <p class="popup-desc">
-      Your digital workbench for organizing environments and project links directly in Chrome's New Tab.
-    </p>
-    <div class="stats-box" id="statsBox">
-      <div class="stat-item">
-        <span class="stat-num" id="catCount">3</span>
-        <span class="stat-label">Categories</span>
+
+      <div class="palette-input-wrap">
+        <span class="palette-search-icon icon-slot" id="paletteSearchIcon" aria-hidden="true"></span>
+        <input
+          type="text"
+          id="paletteInput"
+          class="palette-input"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded="true"
+          aria-controls="paletteListbox"
+          placeholder="Search bookmarks or type commands..."
+          autocomplete="off"
+          spellcheck="false"
+          autofocus
+        >
+        <button type="button" id="paletteClearBtn" class="palette-clear-btn" aria-label="Clear input" style="display: none;">
+          <span class="icon-slot" id="paletteClearIcon"></span>
+        </button>
       </div>
-      <div class="stat-item">
-        <span class="stat-num" id="groupCount">0</span>
-        <span class="stat-label">Groups</span>
+
+      <!-- Bookmark Filter Bar (Visible only in Bookmark mode) -->
+      <div class="palette-filter-bar" id="paletteFilterBar" style="display: none;">
+        <div class="filter-group">
+          <span class="filter-label" id="filterTabLabel">Tab:</span>
+          <select id="paletteTabFilter" class="palette-select" aria-label="Filter by tab">
+            <option value="ALL">All Tabs</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <span class="filter-label" id="filterTagLabel">Tag:</span>
+          <select id="paletteTagFilter" class="palette-select" aria-label="Filter by tag">
+            <option value="ALL">All Tags</option>
+            <option value="LOCAL">LOCAL</option>
+            <option value="DEV">DEV</option>
+            <option value="TEST">TEST</option>
+            <option value="PROD">PROD</option>
+          </select>
+        </div>
+        <button type="button" id="paletteClearFiltersBtn" class="filter-clear-btn" style="display: none;">
+          Clear
+        </button>
       </div>
-      <div class="stat-item">
-        <span class="stat-num" id="linkCount">0</span>
-        <span class="stat-label">Links</span>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="palette-main">
+      <!-- Section A & B: Listbox Results (Command Mode & Bookmark Mode) -->
+      <div id="paletteResultsSection" class="palette-results-section">
+        <div id="paletteSectionHeader" class="palette-section-header"></div>
+        <div id="paletteListbox" class="palette-listbox" role="listbox" aria-label="Palette Items"></div>
+        <div id="paletteEmptyState" class="palette-empty-state" style="display: none;">
+          <p id="paletteEmptyTitle" class="palette-empty-title"></p>
+          <p id="paletteEmptyDesc" class="palette-empty-desc"></p>
+        </div>
       </div>
-    </div>
-    <div class="actions">
-      <button id="openNewTabBtn" class="btn-primary">
-        Open Workbench
-      </button>
-    </div>
+
+      <!-- Quick Capture View (BMK-CAPTURE-001) -->
+      <div id="quickCaptureView" class="quick-capture-view" style="display: none;">
+        <div class="capture-header">
+          <button type="button" id="captureBackBtn" class="btn-ghost btn-sm capture-back-btn">
+            <span class="icon-slot" id="captureBackIcon"></span>
+            <span>Commands</span>
+          </button>
+          <h2 class="capture-title" id="captureTitleHeading">Capture Current Page</h2>
+        </div>
+
+        <!-- Restricted Page Alert -->
+        <div id="captureRestrictedNotice" class="capture-restricted-alert" style="display: none;">
+          <strong id="captureRestrictedTitle">Capture Unavailable</strong>
+          <p id="captureRestrictedDesc">Browser system pages, web store, and local files cannot be captured directly.</p>
+        </div>
+
+        <!-- Capture Form -->
+        <form id="quickCaptureForm" class="capture-form">
+          <!-- Page Info / Favicon / Title -->
+          <div class="form-group">
+            <label for="captureTitleInput" class="form-label" id="captureTitleLabel">Title</label>
+            <div class="title-input-wrapper">
+              <img id="captureFavicon" class="capture-favicon" src="" alt="" style="display: none;">
+              <span id="captureFaviconFallback" class="capture-favicon-fallback icon-slot"></span>
+              <input type="text" id="captureTitleInput" class="form-input" required placeholder="Bookmark title">
+            </div>
+            <!-- Title Suggestions Chips -->
+            <div id="captureTitleSuggestions" class="title-suggestions-chips" style="display: none;">
+              <span class="suggestions-label" id="titleSuggestionsLabel">Suggested:</span>
+              <div id="titleChipsList" class="chips-list"></div>
+            </div>
+          </div>
+
+          <!-- URL & Clean Parameter Toggle -->
+          <div class="form-group">
+            <div class="url-header-row">
+              <label for="captureUrlInput" class="form-label" id="captureUrlLabel">URL</label>
+              <button type="button" id="captureRevertUrlBtn" class="url-action-link" style="display: none;">
+                Revert to original
+              </button>
+            </div>
+            <input type="url" id="captureUrlInput" class="form-input code-font" required placeholder="https://...">
+            <div class="url-clean-status" id="urlCleanStatus" style="display: none;">
+              <span class="clean-badge">Cleaned</span>
+              <span class="clean-desc">Tracking parameters removed</span>
+            </div>
+          </div>
+
+          <!-- Group Combobox Selector -->
+          <div class="form-group">
+            <label for="captureGroupInput" class="form-label" id="captureGroupLabel">Target Group</label>
+            <div class="group-combobox-wrapper" id="groupComboboxWrapper">
+              <input
+                type="text"
+                id="captureGroupInput"
+                class="form-input"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded="false"
+                aria-controls="groupSuggestionsList"
+                placeholder="Search group by name, tab, or existing link..."
+                autocomplete="off"
+              >
+              <input type="hidden" id="captureGroupId" value="">
+              <div id="groupSuggestionsList" class="group-suggestions-list" role="listbox" style="display: none;"></div>
+            </div>
+          </div>
+
+          <!-- Tag / Badge Selection -->
+          <div class="form-group">
+            <label class="form-label" id="captureTagLabel">Tag / Environment</label>
+            <div class="tag-selector-row">
+              <div class="quick-tags" id="captureQuickTags">
+                <button type="button" class="tag-chip" data-tag="LOCAL">LOCAL</button>
+                <button type="button" class="tag-chip" data-tag="DEV">DEV</button>
+                <button type="button" class="tag-chip" data-tag="TEST">TEST</button>
+                <button type="button" class="tag-chip" data-tag="PROD">PROD</button>
+              </div>
+              <input type="text" id="captureCustomTagInput" class="form-input tag-input" placeholder="Custom tag...">
+            </div>
+          </div>
+
+          <!-- Duplicate Alert -->
+          <div id="captureDuplicateAlert" class="capture-duplicate-alert" style="display: none;">
+            <div class="dup-header">
+              <strong id="captureDuplicateNotice">This URL is already bookmarked:</strong>
+            </div>
+            <div id="captureDuplicateLocation" class="dup-location"></div>
+            <div class="dup-actions">
+              <button type="button" id="captureOpenExistingBtn" class="btn-secondary btn-sm">
+                Open Existing
+              </button>
+              <button type="button" id="captureEditExistingBtn" class="btn-ghost btn-sm">
+                Edit in Workbench
+              </button>
+            </div>
+          </div>
+
+          <!-- Form Actions -->
+          <div class="capture-actions">
+            <button type="button" id="captureCancelBtn" class="btn-ghost btn-sm">
+              Cancel
+            </button>
+            <button type="submit" id="captureSaveBtn" class="btn-primary btn-sm">
+              Save Bookmark
+            </button>
+          </div>
+        </form>
+
+        <!-- Save Toast -->
+        <div id="captureToast" class="capture-toast" style="display: none;" role="status">
+          <span class="icon-slot" id="captureToastIcon"></span>
+          <span id="captureToastText">Bookmark saved successfully!</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer: Keyboard Navigation Hints -->
+    <footer class="palette-footer">
+      <span class="footer-nav-hint" id="paletteFooterNavHint">
+        ↑↓ Select · Enter Open · Ctrl/⌘+Enter New Tab · Esc Close
+      </span>
+      <div class="footer-stats" id="paletteFooterStats">
+        <span id="paletteStatCount">0 items</span>
+      </div>
+    </footer>
   </div>
+
   <script type="module" src="popup.js"></script>
 </body>
 </html>

@@ -229,12 +229,13 @@ describe("Bookmark Organizer - Quiet Glyph Apple-style Icon System", async () =>
   it("index.html contains no raw text close characters and retains icon slots", () => {
     // Check that close buttons in HTML do not use raw '✕'
     assert.ok(!htmlContent.includes("✕"), "index.html must not use raw text character '✕'");
-    // Check for icon slots in header buttons
-    assert.match(htmlContent, /id="themeBtnIcon"\s+class="icon-slot"/);
-    assert.match(htmlContent, /id="bgHeaderBtnIcon"\s+class="icon-slot"/);
+    // Check for icon slots in header and dock buttons (UI-ACTION-001)
+    assert.match(htmlContent, /id="moreMenuIcon"\s+class="icon-slot"/);
     assert.match(htmlContent, /id="importBtnIcon"\s+class="icon-slot"/);
     assert.match(htmlContent, /id="exportBtnIcon"\s+class="icon-slot"/);
     assert.match(htmlContent, /id="langBtnIcon"\s+class="icon-slot"/);
     assert.match(htmlContent, /id="manageBtnIcon"\s+class="icon-slot"/);
+    assert.match(htmlContent, /id="dockThemeBtnIcon"\s+class="icon-slot"/);
+    assert.match(htmlContent, /id="dockOpacityBtnIcon"\s+class="icon-slot"/);
   });
 });

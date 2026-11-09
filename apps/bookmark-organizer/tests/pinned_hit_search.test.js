@@ -1548,7 +1548,16 @@ describe("BMK-PRIV-001: Hide Selected Bookmarks (UI Privacy Toggle)", () => {
   it("enforces 48-52px vertical row height for ordinary bookmarks while preserving 4-column responsive grid layout (BMK-HIT-001)", async () => {
     const fs = await import("node:fs/promises");
     const path = await import("node:path");
-    const cssPath = path.resolve(process.cwd(), "apps/bookmark-organizer/src/newtab/style.css");
+    const { fileURLToPath } = await import("node:url");
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const candidate1 = path.resolve(__dirname, "../src/newtab/style.css");
+    const candidate2 = path.resolve(process.cwd(), "apps/bookmark-organizer/src/newtab/style.css");
+    let cssPath = candidate1;
+    try {
+      await fs.access(candidate1);
+    } catch {
+      cssPath = candidate2;
+    }
     const cssText = await fs.readFile(cssPath, "utf8");
 
     // Verify 4-column responsive grid is intact

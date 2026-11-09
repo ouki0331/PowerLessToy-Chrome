@@ -36,38 +36,50 @@
           <kbd id="searchShortcutBadge" class="search-shortcut-kbd" aria-hidden="true">⌘K</kbd>
         </button>
 
-        <!-- Theme Action -->
-        <button id="themeToggleBtn" class="btn btn-ghost btn-sm" title="Theme (Light / Dark / System / Auto)" aria-haspopup="dialog" aria-expanded="false">
-          <span id="themeBtnIcon" class="icon-slot" aria-hidden="true"></span>
-          <span id="themeBtnText">Theme</span>
+        <!-- Add Group Action in Header (UI-ACTION-001) -->
+        <button id="headerAddGroupBtn" class="btn btn-primary btn-sm" type="button" title="Add Group">
+          <span class="icon-slot" aria-hidden="true"></span>
+          <span class="btn-text">+ Add Group</span>
         </button>
 
-        <!-- Background Header Action -->
-        <button id="bgHeaderBtn" class="btn btn-ghost btn-sm" title="Background" aria-haspopup="dialog" aria-expanded="false">
-          <span id="bgHeaderBtnIcon" class="icon-slot" aria-hidden="true"></span>
-          <span id="bgHeaderBtnText">Background</span>
-        </button>
-
-        <!-- Backup & Import Actions -->
-        <button id="importJsonBtn" class="btn btn-ghost btn-sm" title="Import bookmarks from JSON">
-          <span id="importBtnIcon" class="icon-slot" aria-hidden="true"></span>
-          <span id="importBtnText">Import JSON</span>
-        </button>
-        <button id="exportBackupBtn" class="btn btn-ghost btn-sm" title="Export full JSON backup">
-          <span id="exportBtnIcon" class="icon-slot" aria-hidden="true"></span>
-          <span id="exportBtnText">Export Backup</span>
-        </button>
+        <!-- More Menu Action (UI-ACTION-001) -->
+        <div class="more-menu-wrapper" id="moreMenuWrapper">
+          <button id="moreMenuBtn" class="btn btn-ghost btn-sm btn-icon" type="button" title="More Actions" aria-label="More Actions" aria-haspopup="menu" aria-expanded="false">
+            <span id="moreMenuIcon" class="icon-slot" aria-hidden="true"></span>
+          </button>
+          <div id="moreMenuDropdown" class="more-menu-dropdown" role="menu" style="display: none;">
+            <!-- Content Management -->
+            <div class="menu-section-label" id="menuSectionContent">Content</div>
+            <button id="toggleManageBtn" class="menu-item" role="menuitem" type="button">
+              <span id="manageBtnIcon" class="icon-slot" aria-hidden="true"></span>
+              <span class="manage-active-indicator" id="manageIndicator" style="display: none;"></span>
+              <span id="manageBtnText">Manage Bookmarks</span>
+            </button>
+            <div class="menu-divider"></div>
+            <!-- Data Management -->
+            <div class="menu-section-label" id="menuSectionData">Data</div>
+            <button id="importJsonBtn" class="menu-item" role="menuitem" type="button">
+              <span id="importBtnIcon" class="icon-slot" aria-hidden="true"></span>
+              <span id="importBtnText">Import Bookmarks (JSON)</span>
+            </button>
+            <button id="exportBackupBtn" class="menu-item" role="menuitem" type="button">
+              <span id="exportBtnIcon" class="icon-slot" aria-hidden="true"></span>
+              <span id="exportBtnText">Export Bookmarks</span>
+            </button>
+            <div class="menu-divider"></div>
+            <!-- Preferences -->
+            <div class="menu-section-label" id="menuSectionPreferences">Preferences</div>
+            <button id="langToggleBtn" class="menu-item" role="menuitem" type="button">
+              <span id="langBtnIcon" class="icon-slot" aria-hidden="true"></span>
+              <span id="currentLangLabel">Language: EN / JA</span>
+            </button>
+            <button id="shortcutsBtn" class="menu-item" role="menuitem" type="button">
+              <span id="shortcutsBtnIcon" class="icon-slot" aria-hidden="true"></span>
+              <span id="shortcutsBtnText">Keyboard Shortcuts</span>
+            </button>
+          </div>
+        </div>
         <input type="file" id="importFileInput" accept=".json,application/json" style="display: none;">
-
-        <button id="langToggleBtn" class="btn btn-ghost btn-sm" title="Toggle Language (EN / JA)">
-          <span id="langBtnIcon" class="icon-slot" aria-hidden="true"></span>
-          <span id="currentLangLabel">EN</span>
-        </button>
-        <button id="toggleManageBtn" class="btn btn-secondary btn-sm" aria-pressed="false">
-          <span id="manageBtnIcon" class="icon-slot" aria-hidden="true"></span>
-          <span class="manage-active-indicator" id="manageIndicator" style="display: none;"></span>
-          <span id="manageBtnText">Manage Content</span>
-        </button>
       </div>
     </div>
   </header>
@@ -259,9 +271,12 @@
   <div id="bgPopoverContainer" class="bg-popover-container" style="display: none;"></div>
 
   <!-- Floating Action Dock (Bottom Right) -->
-  <aside id="bgFab" class="bg-fab" aria-label="Background Controls">
-    <div id="bgDock" class="bg-dock" role="toolbar" aria-label="Background Controls">
+  <aside id="bgFab" class="bg-fab" aria-label="Appearance & Background Controls">
+    <div id="bgDock" class="bg-dock" role="toolbar" aria-label="Appearance & Background Controls">
       <div id="bgDockActions" class="bg-dock-actions" aria-hidden="true">
+        <button id="dockThemeBtn" class="bg-dock-btn" type="button" aria-label="Theme" title="Theme (Light / Dark / System / Auto)">
+          <span id="dockThemeBtnIcon" class="icon-slot" aria-hidden="true"></span>
+        </button>
         <button id="bgSourceBtn" class="bg-dock-btn" type="button" aria-label="Background Source" title="Background Source">
           <span class="icon-slot"></span>
         </button>
@@ -274,10 +289,13 @@
         <button id="bgLockBtn" class="bg-dock-btn" type="button" aria-label="Lock Current Image" title="Lock Current Image">
           <span class="icon-slot"></span>
         </button>
-        <button id="bgInfoBtn" class="bg-dock-btn" type="button" aria-label="Image Information" title="Image Information" aria-haspopup="dialog" aria-expanded="false">
+        <button id="bgFreqBtn" class="bg-dock-btn" type="button" aria-label="Frequency" title="Frequency" aria-haspopup="dialog" aria-expanded="false">
           <span class="icon-slot"></span>
         </button>
-        <button id="bgSettingsBtn" class="bg-dock-btn" type="button" aria-label="Background Settings" title="Background Settings" aria-haspopup="dialog" aria-expanded="false">
+        <button id="bgOpacityBtn" class="bg-dock-btn" type="button" aria-label="Background Opacity" title="Background Opacity" aria-haspopup="dialog" aria-expanded="false">
+          <span id="dockOpacityBtnIcon" class="icon-slot" aria-hidden="true"></span>
+        </button>
+        <button id="bgInfoBtn" class="bg-dock-btn" type="button" aria-label="Image Information" title="Image Information" aria-haspopup="dialog" aria-expanded="false">
           <span class="icon-slot"></span>
         </button>
       </div>

@@ -2976,5 +2976,182 @@ mark.search-highlight {
   padding: 36px 20px;
 }
 
+/* ==========================================================================
+   More Menu Dropdown (UI-ACTION-001)
+   ========================================================================== */
+.more-menu-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.more-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 210px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+  padding: 6px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.more-menu-dropdown .menu-section-label {
+  padding: 6px 10px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.more-menu-dropdown .menu-divider {
+  height: 1px;
+  background-color: var(--border-subtle);
+  margin: 4px 0;
+}
+
+.more-menu-dropdown .menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.12s ease;
+}
+
+.more-menu-dropdown .menu-item:hover,
+.more-menu-dropdown .menu-item:focus-visible {
+  background-color: var(--bg-subtle);
+  outline: none;
+}
+
+.more-menu-dropdown .menu-item .icon-slot {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Selective Export Modal (DATA-EXPORT-002)
+   ========================================================================== */
+.selective-export-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 420px;
+  max-width: 520px;
+}
+
+.export-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.export-section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.export-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.export-quick-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.export-tabs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-subtle);
+}
+
+.export-tab-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.export-tab-item:hover {
+  background-color: var(--bg-card);
+}
+
+.export-tab-name {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.export-tab-badge {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.export-validation-msg {
+  font-size: 11px;
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.export-format-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background-color: var(--bg-subtle);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.export-format-item,
+.export-option-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.export-disclaimer-note {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  padding: 4px 2px;
+}
+
+
 
 
