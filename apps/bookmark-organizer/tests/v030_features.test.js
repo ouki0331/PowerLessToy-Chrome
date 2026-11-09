@@ -85,11 +85,11 @@ describe("Bookmark Organizer v0.3.0 Capabilities", () => {
   };
 
   describe("CMD-SEARCH-001 & Popup Manifest / Action Integration", () => {
-    it("manifest.json defines 0.3.1, activeTab/scripting permission, and open-bookmark-search shortcut", () => {
+    it("manifest.json defines 0.4.0, activeTab/scripting permission, and open-bookmark-search shortcut", () => {
       const manifestPath = path.join(appDir, "manifest.json");
       const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
 
-      assert.equal(manifest.version, "0.3.1");
+      assert.equal(manifest.version, "0.4.0");
       assert.ok(manifest.permissions.includes("storage"));
       assert.ok(manifest.permissions.includes("activeTab"));
       assert.ok(manifest.permissions.includes("scripting"));

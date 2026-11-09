@@ -69,6 +69,10 @@
             <div class="menu-divider"></div>
             <!-- Preferences -->
             <div class="menu-section-label" id="menuSectionPreferences">Preferences</div>
+            <button id="dictSettingsBtn" class="menu-item" role="menuitem" type="button">
+              <span id="dictSettingsBtnIcon" class="icon-slot" aria-hidden="true"></span>
+              <span id="dictSettingsBtnText">Dictionary Settings</span>
+            </button>
             <button id="langToggleBtn" class="menu-item" role="menuitem" type="button">
               <span id="langBtnIcon" class="icon-slot" aria-hidden="true"></span>
               <span id="currentLangLabel">Language: EN / JA</span>
@@ -263,6 +267,149 @@
           <span id="searchShortcutNotice" class="search-shortcut-tip">Tip: Press / anywhere on this page</span>
           <button id="searchShortcutSettingsBtn" class="btn btn-ghost btn-sm search-shortcut-settings-btn" type="button">Configure Shortcuts</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dictionary Settings Modal (DICT-SETTINGS-001) -->
+  <div class="modal-backdrop" id="dictModalBackdrop" style="display: none;">
+    <div class="modal-dialog modal-dialog-lg" role="dialog" aria-modal="true" aria-labelledby="dictModalTitle">
+      <div class="modal-header">
+        <h2 class="modal-title" id="dictModalTitle">Offline Dictionary Settings</h2>
+        <button id="dictModalCloseBtn" class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Close">
+          <span class="icon-slot" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <div class="modal-body" style="max-height: 70vh; overflow-y: auto; display: flex; flex-direction: column; gap: 20px;">
+        <!-- Master Enable Toggle -->
+        <div class="dict-setting-card">
+          <div class="dict-toggle-row">
+            <div>
+              <div class="dict-setting-label" id="dictMasterEnableLabel">Enable Offline Dictionary</div>
+              <div class="dict-setting-desc" id="dictMasterDesc">Search definitions and linguistic knowledge completely offline with zero telemetry.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="dictMasterToggle">
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Language Packs Section -->
+        <div class="dict-section">
+          <h3 class="dict-section-title" id="dictPacksHeader">Language Packs</h3>
+          <div class="dict-packs-grid">
+            <!-- Japanese Pack Card -->
+            <div class="dict-pack-card" id="dictPackCardJa">
+              <div class="dict-pack-header">
+                <div>
+                  <div class="dict-pack-name" id="dictPackJaTitle">Japanese (JMdict)</div>
+                  <div class="dict-pack-source">EDRDG · CC BY-SA 4.0</div>
+                </div>
+                <span class="dict-pack-status-badge" id="dictPackJaStatus">Not Installed</span>
+              </div>
+              <div class="dict-pack-details" id="dictPackJaDetails">Core vocabulary with readings and glosses.</div>
+              <div class="dict-pack-actions">
+                <button type="button" id="dictInstallJaBtn" class="btn btn-primary btn-sm">Install Pack</button>
+                <button type="button" id="dictUninstallJaBtn" class="btn btn-ghost btn-sm" style="display: none; color: var(--danger);">Uninstall</button>
+              </div>
+            </div>
+
+            <!-- English Pack Card -->
+            <div class="dict-pack-card" id="dictPackCardEn">
+              <div class="dict-pack-header">
+                <div>
+                  <div class="dict-pack-name" id="dictPackEnTitle">English (Open English WordNet)</div>
+                  <div class="dict-pack-source">Global WordNet · CC BY 4.0</div>
+                </div>
+                <span class="dict-pack-status-badge" id="dictPackEnStatus">Not Installed</span>
+              </div>
+              <div class="dict-pack-details" id="dictPackEnDetails">Definitions, parts of speech, synonyms, and senses.</div>
+              <div class="dict-pack-actions">
+                <button type="button" id="dictInstallEnBtn" class="btn btn-primary btn-sm">Install Pack</button>
+                <button type="button" id="dictUninstallEnBtn" class="btn btn-ghost btn-sm" style="display: none; color: var(--danger);">Uninstall</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preferences Section -->
+        <div class="dict-section">
+          <h3 class="dict-section-title">Lookup Preferences</h3>
+          <div class="dict-form-row">
+            <label class="form-label" id="dictDefaultLangLabel" for="dictDefaultLangSelect">Default Source Language</label>
+            <select id="dictDefaultLangSelect" class="form-input">
+              <option value="auto">Auto-detect</option>
+              <option value="ja">Japanese</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+
+          <div class="dict-toggle-row" style="margin-top: 14px;">
+            <div>
+              <div class="dict-setting-label" id="dictContextMenuToggleLabel">Show "Look up in PowerLessToy" in Context Menu</div>
+              <div class="dict-setting-desc" id="dictContextMenuDesc">Quickly look up selected text on any webpage without opening a new tab.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="dictContextMenuToggle">
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- BYOK AI Section -->
+        <div class="dict-section">
+          <h3 class="dict-section-title" id="dictAiHeader">AI Context Explanation (BYOK - Bring Your Own Key)</h3>
+          <div class="dict-toggle-row">
+            <div>
+              <div class="dict-setting-label" id="dictAiToggleLabel">Enable AI Context Explanation</div>
+              <div class="dict-setting-desc" id="dictAiDesc">Optional on-demand AI explanations of word nuances within the surrounding sentence. API keys are stored locally and never exported.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="dictAiToggle">
+              <span class="slider round"></span>
+            </label>
+          </div>
+
+          <div id="dictAiSettingsFields" style="display: none; margin-top: 16px; flex-direction: column; gap: 14px;">
+            <div class="dict-form-row">
+              <label class="form-label" for="dictAiProviderSelect">AI Provider</label>
+              <select id="dictAiProviderSelect" class="form-input">
+                <option value="gemini">Google Gemini</option>
+                <option value="openai">OpenAI</option>
+              </select>
+            </div>
+            <div class="dict-form-row">
+              <label class="form-label" for="dictAiApiKeyInput">API Key</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="password" id="dictAiApiKeyInput" class="form-input" placeholder="Enter API Key (stored locally only)" autocomplete="off">
+                <button type="button" id="dictAiSaveKeyBtn" class="btn btn-secondary btn-sm">Save Key</button>
+              </div>
+              <div id="dictAiKeyStatus" style="font-size: 11px; color: var(--success); display: none; margin-top: 4px;">Key saved securely in local storage.</div>
+            </div>
+            <div class="dict-form-row">
+              <label class="form-label" for="dictAiModelInput">Model Name</label>
+              <input type="text" id="dictAiModelInput" class="form-input" placeholder="gemini-1.5-flash / gpt-4o-mini">
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 6px;">
+              <button type="button" id="dictClearAiCacheBtn" class="btn btn-ghost btn-sm">Clear AI Cache</button>
+              <button type="button" id="dictClearHistoryBtn" class="btn btn-ghost btn-sm">Clear Lookup History</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sources & Licenses Section -->
+        <div class="dict-section">
+          <h3 class="dict-section-title" id="dictSourcesLicensesHeader">Sources & Licenses</h3>
+          <p class="dict-license-text" id="dictSourcesLicensesText">
+            JMdict is property of the Electronic Dictionary Research and Development Group (EDRDG), licensed under CC BY-SA 4.0. Open English WordNet is distributed by the Global WordNet Association under CC BY 4.0.
+          </p>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="dictModalDoneBtn" class="btn btn-primary" type="button">Done</button>
       </div>
     </div>
   </div>

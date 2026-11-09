@@ -108,7 +108,8 @@
     }
 
     const trimmed = (query || "").trim().toLowerCase();
-    const tokens = trimmed ? trimmed.split(/\s+/).filter(Boolean) : [];
+    const sanitized = trimmed.replace(/[()[\]{}]/g, " ");
+    const tokens = sanitized ? sanitized.split(/\s+/).filter(Boolean) : [];
 
     const results = [];
     for (const group of data.groups) {
@@ -160,7 +161,9 @@
     export: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>`,
     close: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
     chevronDown: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`,
-    checkCircle: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`
+    checkCircle: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`,
+    book: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>`,
+    sparkles: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4z"></path></svg>`
   };
 
   // Localized string dictionary
@@ -197,12 +200,20 @@
       captureGroupLabel: "Target Group",
       captureGroupPlaceholder: "Search group by name, tab, or existing link...",
       captureSelectGroupHint: "Please select a target group from the list",
+      captureNoGroupsCreated: "No groups created yet.",
+      captureNoGroupsCreatedHint: "No groups created yet. Please create a group in Bookmark Manager first.",
+      captureOpenWorkbenchToCreate: "Open Bookmark Manager to create Group",
+      captureNoGroupsMatch: "No matching groups found",
       captureTagLabel: "Tag / Environment",
       captureCustomTagPlaceholder: "Custom tag...",
       captureDuplicateTitle: "Duplicate Bookmark Detected",
       captureSaveBtn: "Save Bookmark",
       captureCancelBtn: "Cancel",
-      captureSavedToast: "Bookmark saved!"
+      captureSavedToast: "Bookmark saved!",
+      dictExplainWithAiBtn: "Explain in Context with AI",
+      dictAiExplaining: "Analyzing context with AI...",
+      dictAiExplanationTitle: "AI Context Explanation (BYOK)",
+      dictNoDefinitionsFound: "No dictionary definitions found for this word."
     },
     ja: {
       placeholderAll: "コマンドまたはブックマークを検索...",
@@ -236,12 +247,20 @@
       captureGroupLabel: "保存先グループ",
       captureGroupPlaceholder: "グループ名、タブ、リンクで検索...",
       captureSelectGroupHint: "リストから保存先グループを選択してください",
+      captureNoGroupsCreated: "グループがまだ作成されていません。",
+      captureNoGroupsCreatedHint: "グループがまだ作成されていません。先にブックマークマネージャーで作成してください。",
+      captureOpenWorkbenchToCreate: "ブックマークマネージャーを開いて作成",
+      captureNoGroupsMatch: "一致するグループが見つかりません",
       captureTagLabel: "タグ / 環境",
       captureCustomTagPlaceholder: "カスタムタグ...",
       captureDuplicateTitle: "既存の重複ブックマークを検出",
       captureSaveBtn: "ブックマークを保存",
       captureCancelBtn: "キャンセル",
-      captureSavedToast: "ブックマークを保存しました"
+      captureSavedToast: "ブックマークを保存しました",
+      dictExplainWithAiBtn: "AI で文脈解説",
+      dictAiExplaining: "AI で文脈を分析中...",
+      dictAiExplanationTitle: "AI 文脈解説 (BYOK)",
+      dictNoDefinitionsFound: "この単語の辞書定義が見つかりませんでした。"
     }
   };
 
@@ -606,7 +625,7 @@
       display: flex;
       flex-direction: column;
       overflow-y: auto;
-      padding: 16px 20px;
+      padding: 16px 20px 80px 20px;
       gap: 14px;
     }
 
@@ -697,22 +716,186 @@
 
     .pt-combobox-wrapper {
       position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .pt-combobox-input {
+      padding-right: 32px !important;
+      width: 100%;
+    }
+
+    .pt-combobox-toggle-btn {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      border-radius: 4px;
+    }
+
+    .pt-combobox-toggle-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
     }
 
     .pt-group-suggestions {
       position: absolute;
-      top: 100%;
+      top: calc(100% + 4px);
       left: 0;
       right: 0;
       background: var(--bg-surface);
       border: 1px solid var(--border-strong);
       border-radius: 8px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-      margin-top: 4px;
-      max-height: 180px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.24);
+      max-height: 200px;
       overflow-y: auto;
-      z-index: 100;
+      z-index: 1000;
       padding: 4px;
+    }
+
+    .pt-combobox-empty {
+      padding: 10px 12px;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .pt-combobox-create-btn {
+      display: inline-block;
+      margin-top: 6px;
+      background: var(--primary-subtle);
+      color: var(--primary);
+      border: 1px solid var(--primary);
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    /* Dictionary card in Spotlight */
+    .pt-dict-card {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .pt-dict-header {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .pt-dict-word {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .pt-dict-reading {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .pt-dict-pos-tag {
+      font-size: 10.5px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--primary-subtle);
+      color: var(--primary);
+      font-weight: 500;
+    }
+
+    .pt-dict-senses {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-left: 4px;
+    }
+
+    .pt-dict-sense-item {
+      font-size: 13px;
+      color: var(--text-primary);
+      line-height: 1.45;
+    }
+
+    .pt-dict-sense-num {
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-right: 6px;
+    }
+
+    .pt-dict-sense-example {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-style: italic;
+      margin-top: 2px;
+      margin-left: 18px;
+    }
+
+    .pt-dict-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pt-dict-attribution {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .pt-dict-ai-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--primary);
+      background: var(--primary-subtle);
+      color: var(--primary);
+      font-size: 11.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .pt-dict-ai-btn:hover {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .pt-dict-ai-box {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: var(--bg-hover);
+      border-left: 3px solid var(--primary);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+
+    .pt-dict-ai-box-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 4px;
     }
 
     .pt-combobox-item {
@@ -900,7 +1083,10 @@
         <div class="pt-form-group">
           <label class="pt-form-label" id="labelGroup"></label>
           <div class="pt-combobox-wrapper">
-            <input type="text" id="captureGroupInput" class="pt-form-input" autocomplete="off" />
+            <input type="text" id="captureGroupInput" class="pt-form-input pt-combobox-input" autocomplete="off" />
+            <button type="button" id="captureGroupToggleBtn" class="pt-combobox-toggle-btn" aria-label="Toggle group suggestions">
+              ${ICONS.chevronDown}
+            </button>
             <input type="hidden" id="captureGroupId" value="" />
             <div id="groupSuggestions" class="pt-group-suggestions" style="display: none;"></div>
           </div>
@@ -964,6 +1150,7 @@
     cleanStatusText: container.querySelector("#cleanStatusText"),
     labelGroup: container.querySelector("#labelGroup"),
     captureGroupInput: container.querySelector("#captureGroupInput"),
+    captureGroupToggleBtn: container.querySelector("#captureGroupToggleBtn"),
     captureGroupId: container.querySelector("#captureGroupId"),
     groupSuggestions: container.querySelector("#groupSuggestions"),
     groupError: container.querySelector("#groupError"),
@@ -1130,10 +1317,222 @@
     return scored;
   }
 
+  let currentSearchReq = 0;
+
+  async function renderDictionaryResultIfMatch(query) {
+    const qTrimmed = (query || "").trim();
+    if (!qTrimmed) return false;
+    const isDictCommand = /^(?:dict[\s:]|辞書|辞书)/i.test(qTrimmed);
+    if (!isDictCommand) return false;
+
+    const reqId = ++currentSearchReq;
+    els.resultsBody.replaceChildren();
+
+    const loadingEl = document.createElement("div");
+    loadingEl.className = "pt-section-header";
+    loadingEl.textContent = "Dictionary Lookup...";
+    els.resultsBody.appendChild(loadingEl);
+
+    try {
+      const res = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: "DICT_SEARCH", query: qTrimmed }, (resp) => resolve(resp));
+      });
+
+      if (reqId !== currentSearchReq) return true;
+      els.resultsBody.replaceChildren();
+
+      if (!res || !res.success) {
+        const errEl = document.createElement("div");
+        errEl.className = "pt-dict-card";
+        errEl.textContent = res?.error || "Dictionary search failed.";
+        els.resultsBody.appendChild(errEl);
+        return true;
+      }
+
+      if (res.isEnabled === false) {
+        const card = document.createElement("div");
+        card.className = "pt-dict-card";
+        card.textContent = res.message || "Dictionary module is currently disabled. Enable it in Settings → Dictionary.";
+        els.resultsBody.appendChild(card);
+        return true;
+      }
+
+      if (res.supported === false || res.packInstalled === false) {
+        const card = document.createElement("div");
+        card.className = "pt-dict-card";
+        card.textContent = res.message;
+        els.resultsBody.appendChild(card);
+        return true;
+      }
+
+      const entries = res.entries || [];
+      if (entries.length === 0) {
+        const card = document.createElement("div");
+        card.className = "pt-dict-card";
+        card.textContent = getI18n().dictNoDefinitionsFound || "No dictionary definitions found for this word.";
+        els.resultsBody.appendChild(card);
+        return true;
+      }
+
+      for (const entry of entries) {
+        const card = document.createElement("div");
+        card.className = "pt-dict-card";
+
+        const header = document.createElement("div");
+        header.className = "pt-dict-header";
+
+        const wordEl = document.createElement("span");
+        wordEl.className = "pt-dict-word";
+        wordEl.textContent = entry.word;
+        header.appendChild(wordEl);
+
+        if (entry.reading && entry.reading !== entry.word) {
+          const readingEl = document.createElement("span");
+          readingEl.className = "pt-dict-reading";
+          readingEl.textContent = `[${entry.reading}]`;
+          header.appendChild(readingEl);
+        }
+
+        if (Array.isArray(entry.pos)) {
+          for (const p of entry.pos) {
+            const posEl = document.createElement("span");
+            posEl.className = "pt-dict-pos-tag";
+            posEl.textContent = p;
+            header.appendChild(posEl);
+          }
+        }
+        card.appendChild(header);
+
+        // Senses
+        const sensesContainer = document.createElement("div");
+        sensesContainer.className = "pt-dict-senses";
+
+        const allDefs = [];
+        (entry.senses || []).forEach((s, idx) => {
+          const item = document.createElement("div");
+          item.className = "pt-dict-sense-item";
+
+          const num = document.createElement("span");
+          num.className = "pt-dict-sense-num";
+          num.textContent = `${idx + 1}.`;
+          item.appendChild(num);
+
+          const defText = s.definition || (s.glosses ? s.glosses.join(", ") : "");
+          allDefs.push(defText);
+
+          const textSpan = document.createElement("span");
+          textSpan.textContent = defText;
+          item.appendChild(textSpan);
+
+          if (s.synonyms && s.synonyms.length > 0) {
+            const synSpan = document.createElement("span");
+            synSpan.style.color = "var(--text-muted)";
+            synSpan.style.fontSize = "11.5px";
+            synSpan.textContent = ` (syn: ${s.synonyms.join(", ")})`;
+            item.appendChild(synSpan);
+          }
+
+          if (s.examples && s.examples.length > 0) {
+            const exDiv = document.createElement("div");
+            exDiv.className = "pt-dict-sense-example";
+            exDiv.textContent = `"${s.examples[0]}"`;
+            item.appendChild(exDiv);
+          }
+
+          sensesContainer.appendChild(item);
+        });
+        card.appendChild(sensesContainer);
+
+        // Footer with attribution & AI Button
+        const footer = document.createElement("div");
+        footer.className = "pt-dict-footer";
+
+        const attr = document.createElement("span");
+        attr.className = "pt-dict-attribution";
+        attr.textContent = res.packInfo?.name ? `${res.packInfo.name} · ${res.packInfo.license}` : "";
+        footer.appendChild(attr);
+
+        const aiBtn = document.createElement("button");
+        aiBtn.type = "button";
+        aiBtn.className = "pt-dict-ai-btn";
+        aiBtn.innerHTML = `${ICONS.sparkles} <span>${getI18n().dictExplainWithAiBtn || "Explain with AI"}</span>`;
+
+        const aiBoxContainer = document.createElement("div");
+        aiBoxContainer.style.display = "none";
+
+        aiBtn.addEventListener("click", async () => {
+          aiBtn.disabled = true;
+          aiBtn.innerHTML = `<span>${getI18n().dictAiExplaining || "Analyzing..."}</span>`;
+
+          let contextSentence = "";
+          try {
+            const sel = window.getSelection()?.toString();
+            if (sel && sel.length > 5) {
+              contextSentence = sel;
+            } else {
+              const bodyText = document.body?.innerText || "";
+              const wordIdx = bodyText.indexOf(entry.word);
+              if (wordIdx !== -1) {
+                const start = Math.max(0, wordIdx - 80);
+                const end = Math.min(bodyText.length, wordIdx + 120);
+                contextSentence = bodyText.slice(start, end).replace(/\s+/g, " ");
+              }
+            }
+          } catch {}
+
+          try {
+            const aiResp = await new Promise((resolve) => {
+              chrome.runtime.sendMessage({
+                type: "DICT_AI_EXPLAIN",
+                params: {
+                  word: entry.word,
+                  language: res.detectedLang,
+                  contextSentence,
+                  definitions: allDefs
+                }
+              }, resolve);
+            });
+
+            if (aiResp?.success && aiResp.result?.text) {
+              aiBoxContainer.className = "pt-dict-ai-box";
+              aiBoxContainer.style.display = "block";
+              aiBoxContainer.innerHTML = `
+                <div class="pt-dict-ai-box-badge">${ICONS.sparkles} ${getI18n().dictAiExplanationTitle || "AI Context Explanation"} (${aiResp.result.provider})</div>
+                <div>${aiResp.result.text}</div>
+              `;
+              aiBtn.style.display = "none";
+            } else {
+              aiBtn.disabled = false;
+              aiBtn.textContent = aiResp?.error || "AI explanation failed";
+            }
+          } catch (err) {
+            aiBtn.disabled = false;
+            aiBtn.textContent = err.message;
+          }
+        });
+
+        footer.appendChild(aiBtn);
+        card.appendChild(footer);
+        card.appendChild(aiBoxContainer);
+
+        els.resultsBody.appendChild(card);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Render Unified Single Continuous Stream
    */
   function renderStream() {
+    const qTrimmed = (state.query || "").trim();
+    if (/^(?:dict[\s:]|辞書|辞书)/i.test(qTrimmed)) {
+      renderDictionaryResultIfMatch(qTrimmed);
+      return;
+    }
+
     const t = getI18n();
     const commands = state.scope === "all" ? getCommands() : [];
     const bookmarks = getBookmarks();
@@ -1364,6 +1763,8 @@
       els.captureGroupId.value = "";
       els.captureGroupInput.value = "";
       state.capture.selectedGroupId = "";
+      els.groupError.textContent = t.captureNoGroupsCreatedHint;
+      els.groupError.style.display = "block";
     }
 
     // Tags default
@@ -1395,24 +1796,62 @@
     const hasGroup = Boolean(state.capture.selectedGroupId);
     const hasDup = Boolean(state.capture.duplicate);
 
+    if (!hasGroup && (!state.data?.groups || state.data.groups.length === 0)) {
+      els.groupError.textContent = getI18n().captureNoGroupsCreatedHint;
+      els.groupError.style.display = "block";
+    } else if (!hasGroup && els.captureGroupInput.value.trim()) {
+      els.groupError.textContent = getI18n().captureSelectGroupHint;
+      els.groupError.style.display = "block";
+    }
+
     els.saveCaptureBtn.disabled = !hasTitle || !hasUrl || !hasGroup || hasDup;
   }
 
   function renderGroupSuggestions(query) {
+    els.groupSuggestions.replaceChildren();
+
+    if (!state.data?.groups || state.data.groups.length === 0) {
+      state.comboboxMatches = [];
+      state.comboboxHighlightedIndex = -1;
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "pt-combobox-empty";
+      const textDiv = document.createElement("div");
+      textDiv.textContent = getI18n().captureNoGroupsCreated;
+      const createBtn = document.createElement("button");
+      createBtn.type = "button";
+      createBtn.className = "pt-combobox-create-btn";
+      createBtn.textContent = getI18n().captureOpenWorkbenchToCreate;
+      createBtn.addEventListener("click", () => {
+        chrome.runtime.sendMessage({ type: "OPEN_WORKBENCH" });
+        closeOverlay();
+      });
+      emptyDiv.appendChild(textDiv);
+      emptyDiv.appendChild(createBtn);
+      els.groupSuggestions.appendChild(emptyDiv);
+      els.groupSuggestions.style.display = "block";
+      return;
+    }
+
     const matches = filterGroupsForCombobox(state.data, query, state.groupMetrics);
     state.comboboxMatches = matches;
     state.comboboxHighlightedIndex = -1;
-    els.groupSuggestions.replaceChildren();
 
     if (matches.length === 0) {
-      els.groupSuggestions.style.display = "none";
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "pt-combobox-empty";
+      emptyDiv.textContent = getI18n().captureNoGroupsMatch;
+      els.groupSuggestions.appendChild(emptyDiv);
+      els.groupSuggestions.style.display = "block";
       return;
     }
 
     els.groupSuggestions.style.display = "block";
-    matches.slice(0, 10).forEach((group) => {
+    matches.slice(0, 15).forEach((group) => {
       const row = document.createElement("div");
       row.className = "pt-combobox-item";
+      if (group.id === state.capture.selectedGroupId) {
+        row.classList.add("is-highlighted");
+      }
       const nameEl = document.createElement("span");
       nameEl.textContent = group.name;
       const catEl = document.createElement("span");
@@ -1443,15 +1882,43 @@
     els.groupError.textContent = getI18n().captureSelectGroupHint;
     els.groupError.style.display = "block";
     validateCaptureSavable();
-    renderGroupSuggestions(e.target.value);
+    renderGroupSuggestions(e.target.value.trim());
   });
 
   els.captureGroupInput.addEventListener("focus", () => {
-    renderGroupSuggestions(els.captureGroupInput.value);
+    renderGroupSuggestions("");
   });
+
+  els.captureGroupInput.addEventListener("click", () => {
+    if (els.groupSuggestions.style.display === "none") {
+      renderGroupSuggestions("");
+    }
+  });
+
+  if (els.captureGroupToggleBtn) {
+    els.captureGroupToggleBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (els.groupSuggestions.style.display === "none") {
+        els.captureGroupInput.focus();
+        renderGroupSuggestions("");
+      } else {
+        els.groupSuggestions.style.display = "none";
+      }
+    });
+  }
 
   // Keyboard navigation within group combobox
   els.captureGroupInput.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (els.groupSuggestions.style.display !== "none") {
+        e.preventDefault();
+        e.stopPropagation();
+        els.groupSuggestions.style.display = "none";
+        return;
+      }
+    }
+
     if (els.groupSuggestions.style.display === "none") return;
 
     const items = els.groupSuggestions.querySelectorAll(".pt-combobox-item");
@@ -1596,7 +2063,7 @@
 
   // Close combobox when clicking outside
   container.addEventListener("click", (e) => {
-    if (!els.captureGroupInput.contains(e.target) && !els.groupSuggestions.contains(e.target)) {
+    if (!els.captureGroupInput.contains(e.target) && !els.groupSuggestions.contains(e.target) && !els.captureGroupToggleBtn?.contains(e.target)) {
       els.groupSuggestions.style.display = "none";
     }
   });
@@ -1684,6 +2151,11 @@
     }
 
     updateScopeLabels();
+    if (initialQuery) {
+      state.query = initialQuery;
+      els.searchInput.value = initialQuery;
+      els.clearBtn.style.display = "flex";
+    }
     renderStream();
 
     setTimeout(() => {
@@ -1700,11 +2172,18 @@
     }
   }
 
-  function toggleOverlay() {
+  function toggleOverlay(initialQuery = "") {
     if (state.isOpen) {
-      toggleScope();
+      if (initialQuery) {
+        state.query = initialQuery;
+        els.searchInput.value = initialQuery;
+        els.clearBtn.style.display = "flex";
+        renderStream();
+      } else {
+        toggleScope();
+      }
     } else {
-      openOverlay();
+      openOverlay(initialQuery);
     }
   }
 
@@ -1715,7 +2194,7 @@
   if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
     chrome.runtime.onMessage.addListener((message) => {
       if (message?.type === "TOGGLE_BOOKMARK_ORGANIZER_OVERLAY") {
-        toggleOverlay();
+        toggleOverlay(message.initialQuery || "");
       }
     });
   }

@@ -83,8 +83,8 @@ describe("Bookmark Organizer v0.3.1 - Smoke Imports & Architecture Verification"
       }
     });
 
-    it("has version 0.3.1 and minimal activeTab + scripting permissions", () => {
-      assert.equal(manifest.version, "0.3.1");
+    it("has version 0.4.0 and minimal activeTab + scripting permissions", () => {
+      assert.equal(manifest.version, "0.4.0");
       assert.ok(manifest.permissions.includes("activeTab"));
       assert.ok(manifest.permissions.includes("scripting"));
       assert.ok(manifest.permissions.includes("storage"));

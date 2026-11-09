@@ -87,6 +87,7 @@ function initDomReferences() {
   elements.captureRevertUrlBtn = document.getElementById("captureRevertUrlBtn");
   elements.urlCleanStatus = document.getElementById("urlCleanStatus");
   elements.captureGroupInput = document.getElementById("captureGroupInput");
+  elements.captureGroupToggleBtn = document.getElementById("captureGroupToggleBtn");
   elements.captureGroupId = document.getElementById("captureGroupId");
   elements.groupSuggestionsList = document.getElementById("groupSuggestionsList");
   elements.groupValidationHint = document.getElementById("groupValidationHint");
@@ -524,6 +525,10 @@ function openQuickCapture() {
     elements.captureGroupId.value = "";
     elements.captureGroupInput.value = "";
     state.capture.selectedGroupId = "";
+    if (elements.groupValidationHint) {
+      elements.groupValidationHint.textContent = t("captureNoGroupsCreatedHint");
+      elements.groupValidationHint.style.display = "block";
+    }
   }
 
   // Reset tag
@@ -601,6 +606,18 @@ function validateSaveBtn() {
   const hasGroup = Boolean(state.capture.selectedGroupId);
   const hasDup = Boolean(state.capture.duplicate);
 
+  if (!hasGroup && (!state.data?.groups || state.data.groups.length === 0)) {
+    if (elements.groupValidationHint) {
+      elements.groupValidationHint.textContent = t("captureNoGroupsCreatedHint");
+      elements.groupValidationHint.style.display = "block";
+    }
+  } else if (!hasGroup && elements.captureGroupInput.value.trim()) {
+    if (elements.groupValidationHint) {
+      elements.groupValidationHint.textContent = t("captureSelectGroupHint");
+      elements.groupValidationHint.style.display = "block";
+    }
+  }
+
   elements.captureSaveBtn.disabled = !hasTitle || !hasUrl || !hasGroup || hasDup;
 }
 
@@ -610,20 +627,48 @@ function validateSaveBtn() {
 function setupGroupCombobox() {
   const input = elements.captureGroupInput;
   const listbox = elements.groupSuggestionsList;
+  const toggleBtn = elements.captureGroupToggleBtn;
 
   function renderGroupSuggestions(query) {
+    listbox.replaceChildren();
+
+    if (!state.data?.groups || state.data.groups.length === 0) {
+      state.comboboxMatches = [];
+      state.comboboxHighlightedIndex = -1;
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "combobox-empty";
+      const textDiv = document.createElement("div");
+      textDiv.textContent = t("captureNoGroupsCreated");
+      const createBtn = document.createElement("button");
+      createBtn.type = "button";
+      createBtn.className = "combobox-create-btn";
+      createBtn.textContent = t("captureOpenWorkbenchToCreate");
+      createBtn.addEventListener("click", () => {
+        openWorkbench();
+        window.close();
+      });
+      emptyDiv.appendChild(textDiv);
+      emptyDiv.appendChild(createBtn);
+      listbox.appendChild(emptyDiv);
+      listbox.style.display = "block";
+      return;
+    }
+
     const matched = filterGroupsForCombobox(state.data, query, state.groupMetrics);
     state.comboboxMatches = matched;
     state.comboboxHighlightedIndex = -1;
-    listbox.replaceChildren();
 
     if (matched.length === 0) {
-      listbox.style.display = "none";
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "combobox-empty";
+      emptyDiv.textContent = t("captureNoGroupsMatch");
+      listbox.appendChild(emptyDiv);
+      listbox.style.display = "block";
       return;
     }
 
     listbox.style.display = "block";
-    matched.slice(0, 10).forEach((group) => {
+    matched.slice(0, 15).forEach((group) => {
       const item = document.createElement("div");
       item.className = "combobox-group-item";
       item.setAttribute("role", "option");
@@ -665,14 +710,42 @@ function setupGroupCombobox() {
       elements.groupValidationHint.style.display = "block";
     }
     validateSaveBtn();
-    renderGroupSuggestions(e.target.value);
+    renderGroupSuggestions(e.target.value.trim());
   });
 
   input.addEventListener("focus", () => {
-    renderGroupSuggestions(input.value);
+    renderGroupSuggestions("");
   });
 
+  input.addEventListener("click", () => {
+    if (listbox.style.display === "none") {
+      renderGroupSuggestions("");
+    }
+  });
+
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (listbox.style.display === "none") {
+        input.focus();
+        renderGroupSuggestions("");
+      } else {
+        listbox.style.display = "none";
+      }
+    });
+  }
+
   input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (listbox.style.display !== "none") {
+        e.preventDefault();
+        e.stopPropagation();
+        listbox.style.display = "none";
+        return;
+      }
+    }
+
     if (listbox.style.display === "none") return;
     const items = listbox.querySelectorAll(".combobox-group-item");
     if (items.length === 0) return;
@@ -696,7 +769,7 @@ function setupGroupCombobox() {
   });
 
   document.addEventListener("click", (e) => {
-    if (!elements.captureGroupInput.contains(e.target) && !listbox.contains(e.target)) {
+    if (!elements.captureGroupInput.contains(e.target) && !listbox.contains(e.target) && !toggleBtn?.contains(e.target)) {
       listbox.style.display = "none";
     }
   });

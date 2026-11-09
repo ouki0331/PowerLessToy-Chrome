@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0.0",
+  "updatedAt": "2026-11-09T15:43:11.542Z",
+  "supportedLanguages": [
+    "ja",
+    "en"
+  ],
+  "extensibleLanguages": [
+    "fr",
+    "es"
+  ],
+  "packs": {
+    "ja_jmdict": {
+      "packId": "ja_jmdict",
+      "language": "ja",
+      "name": "JMdict (Japanese-English)",
+      "version": "1.0.0",
+      "generatedAt": "2026-11-09T15:43:11.536Z",
+      "source": "Electronic Dictionary Research and Development Group (EDRDG)",
+      "sourceUrl": "https://ftp.edrdg.org/pub/Nihongo/00INDEX.html",
+      "sourceVersion": "2024-10",
+      "license": "CC BY-SA 4.0",
+      "attribution": "This work uses the JMdict dictionary file, property of the Electronic Dictionary Research and Development Group, used in accordance with the Creative Commons Attribution-ShareAlike 4.0 International license.",
+      "checksum": "d1601887a1a5e554a475a17b79cb1bb89b47655047e54379d20512df9034484f",
+      "fileSize": 21521,
+      "entryCount": 65,
+      "file": "dict_ja_jmdict.json"
+    },
+    "en_wordnet": {
+      "packId": "en_wordnet",
+      "language": "en",
+      "name": "Open English WordNet",
+      "version": "1.0.0",
+      "generatedAt": "2026-11-09T15:43:11.541Z",
+      "source": "Global WordNet Association / Open English WordNet",
+      "sourceUrl": "https://github.com/globalwordnet/english-wordnet/releases",
+      "sourceVersion": "2024-edition",
+      "license": "CC BY 4.0",
+      "attribution": "Open English WordNet is distributed under the Creative Commons Attribution 4.0 International license.",
+      "checksum": "451af115eb09c43d0240eb43738c54622f762d826fdb9739ba1a810ab7c31a1d",
+      "fileSize": 11043,
+      "entryCount": 20,
+      "file": "dict_en_wordnet.json"
+    }
+  }
+}

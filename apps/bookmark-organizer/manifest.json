@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PowerLessToy Bookmark Organizer",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Organize and access project environments and everyday links on Chrome new tab.",
   "chrome_url_overrides": {
     "newtab": "src/newtab/index.html"
@@ -34,11 +34,14 @@
   "permissions": [
     "storage",
     "activeTab",
-    "scripting"
+    "scripting",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://commons.wikimedia.org/*",
-    "https://upload.wikimedia.org/*"
+    "https://upload.wikimedia.org/*",
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "browser_specific_settings": {
     "gecko": {

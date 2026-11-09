@@ -155,5 +155,39 @@ chrome.storage.local / localStorage (LIGHTWEIGHT PREFERENCES)
 - `src/background/`: Service Worker / background script lifecycle management
 - `src/popup/`: Toolbar quick launcher and link counter
 - `src/options/`: Extension information and quick entry
-- `tests/`: Automated unit and integration test suite (`node --test`) verified with 100% pass rate (127 tests)
+- `src/dict/`: Offline dictionary engine:
+  - `dict-constants.js`: Storage keys, default settings, and action constants
+  - `lang-detector.js`: Multi-layer language detection (Kana -> JA, Latin -> EN, Chinese detection and unsupported rejection, ambiguous Kanji fallback)
+  - `dict-db.js`: IndexedDB `powerless_toy_dict_v1` manager with chunked import, indexed point lookups, and local AI cache
+  - `dict-service.js`: High-level dictionary service and on-demand BYOK AI explanation
+  - `packs/`: Bundled dictionary packs (JMdict_e for Japanese, Open English WordNet for English) and manifest
+- `scripts/build-dictionary-packs.js`: Reproducible script to validate, hash (SHA-256), and bundle dictionary data packs
+- `tests/`: Automated unit and integration test suite (`node --test`) verified with 100% pass rate (198 tests)
+
+## Version 0.4.0 Features
+
+### 1. Offline Dictionary & Language Packs (`DICT-PACK-001`, `DICT-LOOKUP-001`)
+- **Default OFF**: Zero background queries, zero memory overhead, and no context menus registered until explicitly enabled in `More → Settings → Dictionary`.
+- **Authentic Open-Source Sources**:
+  - Japanese: JMdict_e by Electronic Dictionary Research and Development Group (EDRDG), licensed under CC BY-SA 4.0.
+  - English: Open English WordNet by Global WordNet Association, licensed under CC BY 4.0.
+- **IndexedDB Storage (`powerless_toy_dict_v1`)**: Point lookups execute in O(1) memory via indexed keys (`word`, `reading`) without keeping large dictionary files in RAM.
+- **Checksum Verification & Safe Rollback**: Packs are validated via SHA-256 before installation; corrupted or invalid packs are rolled back without overwriting existing data.
+- **Language Boundaries**: First release officially supports Japanese and English. Chinese is explicitly unsupported (with clear explanatory notice). Architecture is extensible for future French and Spanish packs.
+
+### 2. Optional BYOK AI Context Explanation (`DICT-AI-001`)
+- **Bring Your Own Key (BYOK)**: Supports OpenAI (`gpt-4o-mini`) and Google Gemini (`gemini-1.5-flash`).
+- **Strict Data Segregation**: API keys are saved exclusively in local storage under `powerless_toy_dict_ai_key` and are NEVER included in bookmark JSON backup exports.
+- **On-Demand & Bounded**: Only triggered when user clicks "Explain in Context with AI". Sends at most 1 surrounding sentence and dictionary glosses — never the full webpage.
+- **Local Caching**: Explanations are cached in IndexedDB `ai_cache` to eliminate redundant API calls and costs.
+
+### 3. Spotlight Central Search & Context Menu (`DICT-ENTRY-001`)
+- **Spotlight Search**: Supports `dict <word>`, `dict: <word>`, `dict ja <word>`, `dict en <word>`, and `辞書 <word>`. Renders headwords, kana readings, POS badges, definitions, and AI explanation buttons directly inside the existing search dialog.
+- **Context Menu**: "Look up in PowerLessToy" context menu option (when enabled) opens search with selected text directly in the active page.
+
+### 4. Group Combobox Pre-requisite Defect Fix
+- **Empty Query on Focus/Click**: Clicking or focusing on `captureGroupInput` queries with `""`, displaying the top 10+ recent groups without being filtered by the formatted display value `Group (Tab)`.
+- **Typing & Validation**: Manual typing clears `selectedGroupId`, validates requirements, and filters candidates across group name, category name, link names, and domains in real-time.
+- **Dropdown Controls**: Toggle chevron button, keyboard navigation (ArrowUp/ArrowDown/Enter), and Escape key handling (closes dropdown without closing the modal).
+- **Empty State**: Explicit "No groups created yet" notice with direct button to open Bookmark Manager. Save button is disabled whenever no valid group is selected.
 

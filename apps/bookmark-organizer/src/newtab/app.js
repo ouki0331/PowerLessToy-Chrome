@@ -63,6 +63,19 @@ import { handleCategoryKeydown, handleModalKeydown } from "./keyboard.js";
 import { DEFAULT_BADGES } from "./constants.js";
 import { t, getLanguage, setLanguage } from "./i18n.js";
 import { SVG_ICONS, renderSvgIcon } from "./icons.js";
+import {
+  getDictSettings,
+  saveDictSettings,
+  getAiApiKey,
+  saveAiApiKey,
+  searchDictionary,
+  explainWithAi,
+  installPack,
+  uninstallPack,
+  getInstalledPacks,
+  clearAiCache,
+  clearHistory
+} from "../dict/dict-service.js";
 import { initBackgroundUI, updateBackgroundUI } from "./background-ui.js";
 import {
   searchBookmarks,
@@ -156,6 +169,31 @@ const elements = {
   get shortcutsBtn() { return el("shortcutsBtn"); },
   get shortcutsBtnIcon() { return el("shortcutsBtnIcon"); },
   get shortcutsBtnText() { return el("shortcutsBtnText"); },
+  get dictSettingsBtn() { return el("dictSettingsBtn"); },
+  get dictSettingsBtnIcon() { return el("dictSettingsBtnIcon"); },
+  get dictSettingsBtnText() { return el("dictSettingsBtnText"); },
+  get dictModalBackdrop() { return el("dictModalBackdrop"); },
+  get dictModalCloseBtn() { return el("dictModalCloseBtn"); },
+  get dictModalDoneBtn() { return el("dictModalDoneBtn"); },
+  get dictModalTitle() { return el("dictModalTitle"); },
+  get dictMasterToggle() { return el("dictMasterToggle"); },
+  get dictPackJaStatus() { return el("dictPackJaStatus"); },
+  get dictInstallJaBtn() { return el("dictInstallJaBtn"); },
+  get dictUninstallJaBtn() { return el("dictUninstallJaBtn"); },
+  get dictPackEnStatus() { return el("dictPackEnStatus"); },
+  get dictInstallEnBtn() { return el("dictInstallEnBtn"); },
+  get dictUninstallEnBtn() { return el("dictUninstallEnBtn"); },
+  get dictDefaultLangSelect() { return el("dictDefaultLangSelect"); },
+  get dictContextMenuToggle() { return el("dictContextMenuToggle"); },
+  get dictAiToggle() { return el("dictAiToggle"); },
+  get dictAiSettingsFields() { return el("dictAiSettingsFields"); },
+  get dictAiProviderSelect() { return el("dictAiProviderSelect"); },
+  get dictAiApiKeyInput() { return el("dictAiApiKeyInput"); },
+  get dictAiSaveKeyBtn() { return el("dictAiSaveKeyBtn"); },
+  get dictAiKeyStatus() { return el("dictAiKeyStatus"); },
+  get dictAiModelInput() { return el("dictAiModelInput"); },
+  get dictClearAiCacheBtn() { return el("dictClearAiCacheBtn"); },
+  get dictClearHistoryBtn() { return el("dictClearHistoryBtn"); },
   get dockThemeBtn() { return el("dockThemeBtn"); },
   get dockThemeBtnIcon() { return el("dockThemeBtnIcon"); },
   get bgOpacityBtn() { return el("bgOpacityBtn"); },
@@ -381,6 +419,8 @@ function initStaticIcons() {
   const headerAddGrpIcon = elements.headerAddGroupBtn?.querySelector(".icon-slot");
   if (headerAddGrpIcon) renderSvgIcon(headerAddGrpIcon, SVG_ICONS.circlePlus);
   if (elements.shortcutsBtnIcon) renderSvgIcon(elements.shortcutsBtnIcon, SVG_ICONS.settings);
+  if (elements.dictSettingsBtnIcon) renderSvgIcon(elements.dictSettingsBtnIcon, SVG_ICONS.book);
+  if (elements.dictModalCloseBtn?.querySelector(".icon-slot")) renderSvgIcon(elements.dictModalCloseBtn.querySelector(".icon-slot"), SVG_ICONS.close);
 
   updatePrivacyToggleUI();
   updateEnvFilterUI();
@@ -390,6 +430,8 @@ function updateI18nLabels() {
   const lang = getLanguage();
   const shortcutLabel = getPlatformSearchShortcutLabel();
   if (elements.currentLangLabel) elements.currentLangLabel.textContent = lang.toUpperCase();
+  if (elements.dictSettingsBtnText) elements.dictSettingsBtnText.textContent = t("moreDictSettings");
+  if (elements.dictModalTitle) elements.dictModalTitle.textContent = t("dictModalTitle");
   if (elements.brandTitle) elements.brandTitle.textContent = t("appTitle");
   if (elements.tagline) elements.tagline.textContent = t("tagline");
   if (elements.manageBtnText) elements.manageBtnText.textContent = state.isManageMode ? t("doneManaging") : t("manageMode");
@@ -552,6 +594,71 @@ function setupEventListeners() {
     } else {
       alert(t("searchShortcutNotice"));
     }
+  });
+
+  // Dictionary Settings Button (DICT-SETTINGS-001)
+  elements.dictSettingsBtn?.addEventListener("click", () => {
+    closeMoreMenu();
+    openDictSettingsModal();
+  });
+
+  elements.dictModalCloseBtn?.addEventListener("click", () => closeDictSettingsModal());
+  elements.dictModalDoneBtn?.addEventListener("click", () => closeDictSettingsModal());
+  elements.dictModalBackdrop?.addEventListener("click", (e) => {
+    if (e.target === elements.dictModalBackdrop) closeDictSettingsModal();
+  });
+
+  elements.dictMasterToggle?.addEventListener("change", async (e) => {
+    await saveDictSettings({ enabled: e.target.checked });
+  });
+
+  elements.dictInstallJaBtn?.addEventListener("click", () => handleInstallPack("ja_jmdict"));
+  elements.dictUninstallJaBtn?.addEventListener("click", () => handleUninstallPack("ja_jmdict"));
+  elements.dictInstallEnBtn?.addEventListener("click", () => handleInstallPack("en_wordnet"));
+  elements.dictUninstallEnBtn?.addEventListener("click", () => handleUninstallPack("en_wordnet"));
+
+  elements.dictDefaultLangSelect?.addEventListener("change", async (e) => {
+    await saveDictSettings({ defaultSourceLang: e.target.value });
+  });
+
+  elements.dictContextMenuToggle?.addEventListener("change", async (e) => {
+    await saveDictSettings({ contextMenuEnabled: e.target.checked });
+  });
+
+  elements.dictAiToggle?.addEventListener("change", async (e) => {
+    if (elements.dictAiSettingsFields) {
+      elements.dictAiSettingsFields.style.display = e.target.checked ? "flex" : "none";
+    }
+    await saveDictSettings({ aiEnabled: e.target.checked });
+  });
+
+  elements.dictAiProviderSelect?.addEventListener("change", async (e) => {
+    await saveDictSettings({ aiProvider: e.target.value });
+  });
+
+  elements.dictAiModelInput?.addEventListener("change", async (e) => {
+    await saveDictSettings({ aiModel: e.target.value.trim() });
+  });
+
+  elements.dictAiSaveKeyBtn?.addEventListener("click", async () => {
+    const key = elements.dictAiApiKeyInput?.value.trim();
+    await saveAiApiKey(key);
+    if (elements.dictAiKeyStatus) {
+      elements.dictAiKeyStatus.style.display = "block";
+      setTimeout(() => {
+        if (elements.dictAiKeyStatus) elements.dictAiKeyStatus.style.display = "none";
+      }, 3000);
+    }
+  });
+
+  elements.dictClearAiCacheBtn?.addEventListener("click", async () => {
+    await clearAiCache();
+    alert("AI Cache cleared.");
+  });
+
+  elements.dictClearHistoryBtn?.addEventListener("click", async () => {
+    await clearHistory();
+    alert("Lookup history cleared.");
   });
 
   // Toggle Language
@@ -3651,9 +3758,276 @@ function closeSearchModal() {
   }
 }
 
+async function openDictSettingsModal() {
+  if (!elements.dictModalBackdrop) return;
+  elements.dictModalBackdrop.style.display = "flex";
+
+  const [settings, apiKey, installedPacks] = await Promise.all([
+    getDictSettings(),
+    getAiApiKey().catch(() => ""),
+    getInstalledPacks().catch(() => [])
+  ]);
+
+  if (elements.dictMasterToggle) {
+    elements.dictMasterToggle.checked = Boolean(settings.enabled);
+  }
+
+  const jaInstalled = installedPacks.some((p) => p.language === "ja" || p.packId === "ja_jmdict");
+  const enInstalled = installedPacks.some((p) => p.language === "en" || p.packId === "en_wordnet");
+
+  updatePackUI("ja", jaInstalled);
+  updatePackUI("en", enInstalled);
+
+  if (elements.dictDefaultLangSelect) {
+    elements.dictDefaultLangSelect.value = settings.defaultSourceLang || "auto";
+  }
+
+  if (elements.dictContextMenuToggle) {
+    elements.dictContextMenuToggle.checked = Boolean(settings.contextMenuEnabled);
+  }
+
+  if (elements.dictAiToggle) {
+    elements.dictAiToggle.checked = Boolean(settings.aiEnabled);
+  }
+
+  if (elements.dictAiSettingsFields) {
+    elements.dictAiSettingsFields.style.display = settings.aiEnabled ? "flex" : "none";
+  }
+
+  if (elements.dictAiProviderSelect) {
+    elements.dictAiProviderSelect.value = settings.aiProvider || "gemini";
+  }
+
+  if (elements.dictAiModelInput) {
+    elements.dictAiModelInput.value = settings.aiModel || "gemini-1.5-flash";
+  }
+
+  if (elements.dictAiApiKeyInput) {
+    elements.dictAiApiKeyInput.value = apiKey || "";
+  }
+
+  if (elements.dictAiKeyStatus) {
+    elements.dictAiKeyStatus.style.display = apiKey ? "block" : "none";
+  }
+}
+
+function updatePackUI(lang, isInstalled) {
+  const statusEl = lang === "ja" ? elements.dictPackJaStatus : elements.dictPackEnStatus;
+  const installBtn = lang === "ja" ? elements.dictInstallJaBtn : elements.dictInstallEnBtn;
+  const uninstallBtn = lang === "ja" ? elements.dictUninstallJaBtn : elements.dictUninstallEnBtn;
+
+  if (statusEl) {
+    statusEl.textContent = isInstalled ? t("dictPackInstalled") : t("dictPackNotInstalled");
+    statusEl.classList.toggle("is-installed", isInstalled);
+  }
+
+  if (installBtn) {
+    installBtn.textContent = isInstalled ? t("dictReinstallBtn") : t("dictInstallBtn");
+  }
+
+  if (uninstallBtn) {
+    uninstallBtn.style.display = isInstalled ? "inline-block" : "none";
+  }
+}
+
+function closeDictSettingsModal() {
+  if (!elements.dictModalBackdrop) return;
+  elements.dictModalBackdrop.style.display = "none";
+}
+
+async function handleInstallPack(packId) {
+  const lang = packId === "ja_jmdict" ? "ja" : "en";
+  const btn = lang === "ja" ? elements.dictInstallJaBtn : elements.dictInstallEnBtn;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = t("dictInstalling");
+  }
+
+  try {
+    const fileName = packId === "ja_jmdict" ? "dict_ja_jmdict.json" : "dict_en_wordnet.json";
+    const packUrl = chrome.runtime.getURL(`src/dict/packs/${fileName}`);
+    const res = await fetch(packUrl);
+    if (!res.ok) throw new Error("Could not load pack file");
+    const packData = await res.json();
+    await installPack(packData);
+    const settings = await getDictSettings();
+    await saveDictSettings({
+      installedPacks: { ...settings.installedPacks, [packId]: true }
+    });
+    updatePackUI(lang, true);
+  } catch (err) {
+    alert(`Pack install failed: ${err.message}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = t("dictReinstallBtn");
+    }
+  }
+}
+
+async function handleUninstallPack(packId) {
+  const lang = packId === "ja_jmdict" ? "ja" : "en";
+  try {
+    await uninstallPack(packId);
+    const settings = await getDictSettings();
+    await saveDictSettings({
+      installedPacks: { ...settings.installedPacks, [packId]: false }
+    });
+    updatePackUI(lang, false);
+  } catch (err) {
+    alert(`Uninstall failed: ${err.message}`);
+  }
+}
+
+async function renderDictionaryInSpotlight(query, reqId) {
+  const listbox = elements.searchResultsListbox;
+  if (!listbox) return;
+
+  listbox.innerHTML = "";
+  listbox.style.display = "block";
+  if (elements.searchEmptyState) elements.searchEmptyState.style.display = "none";
+  if (elements.searchSectionLabel) elements.searchSectionLabel.textContent = "Dictionary";
+
+  try {
+    const res = await searchDictionary(query);
+    if (reqId !== searchRequestSeq) return;
+
+    if (!res || !res.isEnabled) {
+      listbox.innerHTML = `<div class="dict-result-card">${res?.message || "Dictionary is disabled."}</div>`;
+      return;
+    }
+
+    if (!res.supported || !res.packInstalled) {
+      listbox.innerHTML = `<div class="dict-result-card">${res.message}</div>`;
+      return;
+    }
+
+    const entries = res.entries || [];
+    if (entries.length === 0) {
+      listbox.innerHTML = `<div class="dict-result-card">${t("dictNoDefinitionsFound")}</div>`;
+      return;
+    }
+
+    listbox.innerHTML = "";
+    for (const entry of entries) {
+      const card = document.createElement("div");
+      card.className = "dict-result-card";
+
+      const header = document.createElement("div");
+      header.className = "dict-result-header";
+
+      const wordSpan = document.createElement("span");
+      wordSpan.className = "dict-result-word";
+      wordSpan.textContent = entry.word;
+      header.appendChild(wordSpan);
+
+      if (entry.reading && entry.reading !== entry.word) {
+        const rSpan = document.createElement("span");
+        rSpan.className = "dict-result-reading";
+        rSpan.textContent = `[${entry.reading}]`;
+        header.appendChild(rSpan);
+      }
+
+      if (Array.isArray(entry.pos)) {
+        for (const p of entry.pos) {
+          const posSpan = document.createElement("span");
+          posSpan.className = "dict-result-pos";
+          posSpan.textContent = p;
+          header.appendChild(posSpan);
+        }
+      }
+      card.appendChild(header);
+
+      const sensesDiv = document.createElement("div");
+      sensesDiv.className = "dict-result-senses";
+
+      const allDefs = [];
+      (entry.senses || []).forEach((s, idx) => {
+        const item = document.createElement("div");
+        item.className = "dict-result-sense-item";
+
+        const num = document.createElement("span");
+        num.className = "dict-result-sense-num";
+        num.textContent = `${idx + 1}.`;
+        item.appendChild(num);
+
+        const def = s.definition || (s.glosses ? s.glosses.join(", ") : "");
+        allDefs.push(def);
+
+        const txt = document.createElement("span");
+        txt.textContent = def;
+        item.appendChild(txt);
+
+        if (s.synonyms && s.synonyms.length > 0) {
+          const syn = document.createElement("span");
+          syn.style.color = "var(--text-muted)";
+          syn.style.fontSize = "11.5px";
+          syn.textContent = ` (syn: ${s.synonyms.join(", ")})`;
+          item.appendChild(syn);
+        }
+        sensesDiv.appendChild(item);
+      });
+      card.appendChild(sensesDiv);
+
+      const footer = document.createElement("div");
+      footer.className = "dict-result-footer";
+
+      const attr = document.createElement("span");
+      attr.className = "dict-pack-source";
+      attr.textContent = res.packInfo?.name ? `${res.packInfo.name} · ${res.packInfo.license}` : "";
+      footer.appendChild(attr);
+
+      const aiBtn = document.createElement("button");
+      aiBtn.type = "button";
+      aiBtn.className = "dict-result-ai-btn";
+      aiBtn.textContent = t("dictExplainWithAiBtn");
+
+      const aiBox = document.createElement("div");
+      aiBox.style.display = "none";
+
+      aiBtn.addEventListener("click", async () => {
+        aiBtn.disabled = true;
+        aiBtn.textContent = t("dictAiExplaining");
+
+        try {
+          const aiRes = await explainWithAi({
+            word: entry.word,
+            language: res.detectedLang,
+            definitions: allDefs
+          });
+
+          if (aiRes?.text) {
+            aiBox.className = "dict-result-ai-box";
+            aiBox.style.display = "block";
+            aiBox.innerHTML = `<strong>${t("dictAiExplanationTitle")} (${aiRes.provider})</strong><div style="margin-top: 4px;">${aiRes.text}</div>`;
+            aiBtn.style.display = "none";
+          }
+        } catch (err) {
+          aiBtn.disabled = false;
+          aiBtn.textContent = err.message;
+        }
+      });
+
+      footer.appendChild(aiBtn);
+      card.appendChild(footer);
+      card.appendChild(aiBox);
+
+      listbox.appendChild(card);
+    }
+  } catch (err) {
+    listbox.innerHTML = `<div class="dict-result-card">Dictionary lookup failed: ${err.message}</div>`;
+  }
+}
+
 async function refreshSearchResults() {
   if (!state.data) return [];
   const reqId = ++searchRequestSeq;
+
+  const trimmedSearchQuery = (state.searchQuery || "").trim();
+  if (/^(?:dict[\s:]|辞書|辞书)/i.test(trimmedSearchQuery)) {
+    renderDictionaryInSpotlight(trimmedSearchQuery, reqId);
+    return [];
+  }
 
   const [linkMetricsMap, groupMetricsMap] = await Promise.all([
     getLinkMetricsMap().catch(() => new Map()),

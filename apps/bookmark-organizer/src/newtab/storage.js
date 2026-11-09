@@ -232,7 +232,8 @@ export function filterGroupsForCombobox(data, query = "", recentGroupMetrics = n
   }
 
   const trimmedQuery = (query || "").trim().toLowerCase();
-  const queryTokens = trimmedQuery ? trimmedQuery.split(/\s+/).filter(Boolean) : [];
+  const sanitizedQuery = trimmedQuery.replace(/[()[\]{}]/g, " ");
+  const queryTokens = sanitizedQuery ? sanitizedQuery.split(/\s+/).filter(Boolean) : [];
 
   const groupItems = [];
   for (const group of data.groups) {
