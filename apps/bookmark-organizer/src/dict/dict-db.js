@@ -167,9 +167,6 @@ async function deleteEntriesForPack(db, packId) {
   });
 }
 
-/**
- * Delete entries matching a specific version string.
- */
 async function deleteEntriesForVersion(db, version) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(DICT_STORES.ENTRIES, "readwrite");
@@ -187,6 +184,38 @@ async function deleteEntriesForVersion(db, version) {
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error);
   });
+}
+
+/**
+ * Safely purge retired entries for a given packId whose version does not match activeVersion.
+ * Note: failure during cleanup is caught and logged, never blocking new pack queries.
+ */
+async function purgeRetiredEntries(db, packId, currentActiveVersion) {
+  try {
+    const tx = db.transaction(DICT_STORES.ENTRIES, "readwrite");
+    const store = tx.objectStore(DICT_STORES.ENTRIES);
+    const index = store.index("packId");
+    const req = index.openCursor(IDBKeyRange.only(packId));
+
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (cursor) {
+        const record = cursor.value;
+        if (record.version !== currentActiveVersion) {
+          cursor.delete();
+        }
+        cursor.continue();
+      }
+    };
+
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn("Failed to purge retired dictionary entries for pack:", packId, err);
+  }
 }
 
 /**
@@ -305,12 +334,8 @@ export async function installPackFromChunks(packMeta, chunkLoader, { onProgress 
       tx.onerror = () => reject(tx.error);
     });
 
-    // 4. Clean up old retired version entries
-    if (oldActiveVersion && oldActiveVersion !== stagingVersion) {
-      deleteEntriesForVersion(db, oldActiveVersion).catch((err) => {
-        console.warn("Error cleaning up retired dictionary version:", err);
-      });
-    }
+    // 4. Safely clean up retired entries (including unversioned entries from v1)
+    purgeRetiredEntries(db, packId, stagingVersion);
 
     return { success: true, packId, entryCount: stagedCount };
   } catch (err) {
@@ -403,10 +428,8 @@ export async function installPack(packData, { rawText = "", expectedChecksum = "
       tx.onerror = () => reject(tx.error);
     });
 
-    // 3. Clean up old version
-    if (oldActiveVersion && oldActiveVersion !== stagingVersion) {
-      deleteEntriesForVersion(db, oldActiveVersion).catch(() => {});
-    }
+    // 3. Safely clean up retired entries (including unversioned entries from v1)
+    purgeRetiredEntries(db, packId, stagingVersion);
 
     return { success: true, packId, entryCount: total };
   } catch (err) {
@@ -447,9 +470,13 @@ export async function lookupWord(rawWord, { lang = null, limit = 10 } = {}) {
   if (installedPacks.length === 0) return [];
 
   const activeVersionMap = new Map();
+  const packLangMap = new Map();
   for (const p of installedPacks) {
     if (p.activeVersion) {
       activeVersionMap.set(p.packId, p.activeVersion);
+    }
+    if (p.language) {
+      packLangMap.set(p.packId, p.language);
     }
   }
 
@@ -469,7 +496,7 @@ export async function lookupWord(rawWord, { lang = null, limit = 10 } = {}) {
       });
 
       if (lang) {
-        results = results.filter((r) => r.language === lang);
+        results = results.filter((r) => (r.language || packLangMap.get(r.packId)) === lang);
       }
       // Prioritize common entries
       results.sort((a, b) => (b.common ? 1 : 0) - (a.common ? 1 : 0));

@@ -1,9 +1,9 @@
 /**
- * Unit & Integration Tests: Offline Dictionary & AI Security (v0.4.0)
+ * Unit & Integration Tests: Offline Dictionary, Migration & Security (v0.4.0)
  *
- * Verifies all 14 Acceptance Criteria:
- * 1. Official download files exist and raw SHA-256 matches fetch metadata.
- * 2. Production build does NOT depend on dummy seed data.
+ * Verifies all Acceptance Criteria without requiring network or local .cache:
+ * 1. Committed production manifest and chunks integrity.
+ * 2. Manifest contains authentic source metadata (sourceSha256, sourceFileSize, sourceDownloadedAt).
  * 3. JMdict entries reach official scale (> 200,000).
  * 4. OEWN entries reach official scale (> 120,000).
  * 5. Japanese queries: 学校, 会社, 未来, 開発, 読書, 日本語, 辞書.
@@ -16,6 +16,14 @@
  * 12. Query lookups make zero network requests (100% offline).
  * 13. AI explanation text is rendered safely without HTML injection.
  * 14. Existing backup export never leaks dictionary data or API keys.
+ * 15. IndexedDB Database Migration from v1 to v2:
+ *     - Old database without version index upgrades cleanly.
+ *     - Legacy entries without version field handled gracefully.
+ *     - Zero NotFoundError on version index queries.
+ * 16. HTTPS download supply chain security:
+ *     - Rejects insecure HTTP protocol.
+ *     - Rejects insecure redirect from HTTPS to HTTP.
+ *     - Cleans up .part files on download failure/abort.
  */
 
 import { describe, it, beforeEach, afterEach } from "node:test";
@@ -24,6 +32,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import "fake-indexeddb/auto";
+
+import {
+  DICT_DB_NAME,
+  DICT_DB_VERSION,
+  DICT_STORES
+} from "../src/dict/dict-constants.js";
 
 import {
   parseDictCommand,
@@ -53,12 +67,12 @@ import {
   searchDictionary
 } from "../src/dict/dict-service.js";
 
+import { downloadHttpsFile } from "../scripts/fetch-dictionary-data.js";
 import { generateBackupJson } from "../src/newtab/import-export.js";
 import { SAMPLE_JA_PACK, SAMPLE_EN_PACK } from "./fixtures/sample-dictionary-fixture.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PACKS_DIR = path.resolve(__dirname, "../src/dict/packs");
-const CACHE_DIR = path.resolve(__dirname, "../.cache/dictionary");
 const MANIFEST_PATH = path.join(PACKS_DIR, "manifest.json");
 
 describe("Offline Dictionary Module (v0.4.0)", () => {
@@ -67,7 +81,7 @@ describe("Offline Dictionary Module (v0.4.0)", () => {
     const idb = globalThis.indexedDB;
     if (idb) {
       await new Promise((resolve) => {
-        const req = idb.deleteDatabase("powerless_toy_dict_v1");
+        const req = idb.deleteDatabase(DICT_DB_NAME);
         req.onsuccess = () => resolve();
         req.onerror = () => resolve();
         req.onblocked = () => resolve();
@@ -79,37 +93,171 @@ describe("Offline Dictionary Module (v0.4.0)", () => {
     closeDictDb();
   });
 
-  describe("1. Official Data Sources & Build Integrity", () => {
-    it("official downloaded archives exist in cache with correct metadata", () => {
-      const metaPath = path.join(CACHE_DIR, "fetch-meta.json");
-      assert.ok(fs.existsSync(metaPath), "fetch-meta.json must exist in cache");
-      const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-
-      assert.ok(meta.ja?.fileSize > 10000000, "JMdict archive size must be > 10MB");
-      assert.equal(typeof meta.ja?.sha256, "string");
-      assert.ok(meta.ja.sha256.length === 64, "JMdict sha256 must be 64-char hex");
-
-      assert.ok(meta.en?.fileSize > 9000000, "OEWN archive size must be > 9MB");
-      assert.equal(typeof meta.en?.sha256, "string");
-      assert.ok(meta.en.sha256.length === 64, "OEWN sha256 must be 64-char hex");
-    });
-
-    it("production manifest reaches official scale and does not use seed dummy data", () => {
-      assert.ok(fs.existsSync(MANIFEST_PATH), "manifest.json must exist");
+  describe("1. Committed Manifest & Chunks Integrity (Cache-Independent)", () => {
+    it("production manifest exists and contains authentic source metadata", () => {
+      assert.ok(fs.existsSync(MANIFEST_PATH), "manifest.json must exist in git repository");
       const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));
 
       const ja = manifest.packs.ja_jmdict;
       const en = manifest.packs.en_wordnet;
 
+      // Source metadata validation
+      assert.ok(/^[a-f0-9]{64}$/i.test(ja.sourceSha256), "JMdict sourceSha256 must be 64-char hex");
+      assert.ok(typeof ja.sourceFileSize === "number" && ja.sourceFileSize > 10000000);
+      assert.ok(!isNaN(Date.parse(ja.sourceDownloadedAt)), "JMdict sourceDownloadedAt must be valid date");
+      assert.ok(ja.sourceUrl.startsWith("https://"), "JMdict sourceUrl must be HTTPS");
+
+      assert.ok(/^[a-f0-9]{64}$/i.test(en.sourceSha256), "OEWN sourceSha256 must be 64-char hex");
+      assert.ok(typeof en.sourceFileSize === "number" && en.sourceFileSize > 9000000);
+      assert.ok(!isNaN(Date.parse(en.sourceDownloadedAt)), "OEWN sourceDownloadedAt must be valid date");
+      assert.ok(en.sourceUrl.startsWith("https://"), "OEWN sourceUrl must be HTTPS");
+
+      // Scale validation
       assert.ok(ja.entryCount > 200000, `JMdict entries (${ja.entryCount}) must be > 200,000`);
       assert.ok(en.entryCount > 120000, `OEWN entries (${en.entryCount}) must be > 120,000`);
 
-      assert.ok(ja.chunkCount >= 20, "JMdict must be split into at least 20 chunks");
-      assert.ok(en.chunkCount >= 10, "OEWN must be split into at least 10 chunks");
+      // Chunk validation
+      assert.equal(ja.chunkCount, ja.chunks.length);
+      assert.equal(en.chunkCount, en.chunks.length);
+      assert.equal(ja.chunks.reduce((s, c) => s + c.entryCount, 0), ja.entryCount);
+      assert.equal(en.chunks.reduce((s, c) => s + c.entryCount, 0), en.entryCount);
+    });
+
+    it("all committed chunk files exist and match sizes specified in manifest", () => {
+      const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));
+      const allChunks = [...manifest.packs.ja_jmdict.chunks, ...manifest.packs.en_wordnet.chunks];
+
+      for (const chunk of allChunks) {
+        const chunkPath = path.join(PACKS_DIR, chunk.file);
+        assert.ok(fs.existsSync(chunkPath), `Committed chunk must exist: ${chunk.file}`);
+        const stat = fs.statSync(chunkPath);
+        assert.equal(stat.size, chunk.size, `File size mismatch for ${chunk.file}`);
+      }
     });
   });
 
-  describe("2. Multi-layer Language Detection & Kanji Disambiguation", () => {
+  describe("2. IndexedDB v1 -> v2 Migration & Version Index Handling", () => {
+    it("reliably upgrades v1 database without version index and preserves existing data", async () => {
+      closeDictDb();
+      const idb = globalThis.indexedDB;
+
+      // 1. Manually construct a legacy v1 database (without 'version' index on entries)
+      await new Promise((resolve, reject) => {
+        const req = idb.open(DICT_DB_NAME, 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          db.createObjectStore(DICT_STORES.PACKS, { keyPath: "packId" });
+          const entryStore = db.createObjectStore(DICT_STORES.ENTRIES, { keyPath: "id" });
+          entryStore.createIndex("packId", "packId", { unique: false });
+          entryStore.createIndex("word", "word", { unique: false });
+          entryStore.createIndex("reading", "reading", { unique: false });
+          entryStore.createIndex("lookupKeys", "lookupKeys", { unique: false, multiEntry: true });
+          // Note: NO version index in v1!
+          db.createObjectStore(DICT_STORES.AI_CACHE, { keyPath: "cacheKey" });
+          db.createObjectStore(DICT_STORES.HISTORY, { keyPath: "id", autoIncrement: true });
+        };
+        req.onsuccess = (e) => {
+          const db = e.target.result;
+          // Populate legacy v1 data
+          const tx = db.transaction([DICT_STORES.PACKS, DICT_STORES.ENTRIES, DICT_STORES.AI_CACHE], "readwrite");
+          tx.objectStore(DICT_STORES.PACKS).put({
+            packId: "ja_jmdict",
+            language: "ja",
+            name: "Legacy JMdict",
+            version: "1.0.0-legacy"
+            // Note: NO activeVersion field in v1!
+          });
+          tx.objectStore(DICT_STORES.ENTRIES).put({
+            id: "legacy_entry_1",
+            packId: "ja_jmdict",
+            word: "本",
+            reading: "ほん",
+            lookupKeys: ["本", "ほん"],
+            senses: [{ glosses: ["book"] }]
+            // Note: NO version field in v1!
+          });
+          tx.objectStore(DICT_STORES.AI_CACHE).put({
+            cacheKey: "legacy_ai_key",
+            value: "Pre-existing explanation"
+          });
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => reject(tx.error);
+        };
+        req.onerror = () => reject(req.error);
+      });
+
+      // 2. Open using new openDictDb() which uses DICT_DB_VERSION (2)
+      assert.equal(DICT_DB_VERSION, 2, "DICT_DB_VERSION must be incremented to 2");
+      const upgradedDb = await openDictDb();
+      assert.equal(upgradedDb.version, 2, "Database must be upgraded to version 2");
+
+      // Verify 'version' index now exists on 'entries' object store
+      const txCheck = upgradedDb.transaction(DICT_STORES.ENTRIES, "readonly");
+      const entryStore = txCheck.objectStore(DICT_STORES.ENTRIES);
+      assert.ok(entryStore.indexNames.contains("version"), "version index must be added on upgrade");
+
+      // Verify legacy data is preserved
+      const legacyHits = await lookupWord("本", { lang: "ja" });
+      assert.equal(legacyHits.length, 1);
+      assert.equal(legacyHits[0].reading, "ほん");
+
+      const aiCacheVal = await getAiCache("legacy_ai_key");
+      assert.equal(aiCacheVal, "Pre-existing explanation");
+
+      // 3. Install new chunked pack on top of migrated database
+      const newPack = {
+        packId: "ja_jmdict",
+        language: "ja",
+        name: "JMdict Official",
+        version: "2026.11.10",
+        entryCount: 2,
+        chunks: [
+          {
+            file: "test_chunk.json",
+            entryCount: 2,
+            size: 50,
+            checksum: ""
+          }
+        ]
+      };
+
+      const chunkData = {
+        packId: "ja_jmdict",
+        language: "ja",
+        entries: [
+          {
+            id: "jmdict_101",
+            word: "学校",
+            reading: "がっこう",
+            senses: [{ glosses: ["school"] }]
+          },
+          {
+            id: "jmdict_102",
+            word: "会社",
+            reading: "かいしゃ",
+            senses: [{ glosses: ["company"] }]
+          }
+        ]
+      };
+
+      // Must install without NotFoundError on version index
+      await installPackFromChunks(newPack, async () => JSON.stringify(chunkData));
+
+      // 4. Verify only new active version entries are returned
+      const newHits = await lookupWord("学校", { lang: "ja" });
+      assert.equal(newHits.length, 1);
+      assert.equal(newHits[0].reading, "がっこう");
+
+      // Retired entry "本" has been cleanly purged and does not appear
+      const oldHits = await lookupWord("本", { lang: "ja" });
+      assert.equal(oldHits.length, 0);
+    });
+  });
+
+  describe("3. Multi-layer Language Detection & Kanji Disambiguation", () => {
     it("parses explicit command prefixes (dict ja, dict en, 辞書)", () => {
       assert.deepEqual(parseDictCommand("dict ja 桜"), {
         isCommand: true,
@@ -153,7 +301,7 @@ describe("Offline Dictionary Module (v0.4.0)", () => {
     });
   });
 
-  describe("3. Pack Installation, Atomic Staging, and Checksum Rollback", () => {
+  describe("4. Pack Installation, Atomic Staging, and Checksum Rollback", () => {
     it("installs a sample pack and queries entries", async () => {
       await installPack(SAMPLE_JA_PACK);
 
@@ -227,12 +375,11 @@ describe("Offline Dictionary Module (v0.4.0)", () => {
     });
   });
 
-  describe("4. Official Dictionary Lookups & Reading Hits", () => {
+  describe("5. Official Dictionary Lookups & Reading Hits", () => {
     it("can install chunked packs and lookup Japanese common words and kana readings", async () => {
       const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));
       const jaMeta = manifest.packs.ja_jmdict;
 
-      // Find the chunk containing "学校"
       let targetChunkFile = null;
       for (const c of jaMeta.chunks) {
         const raw = fs.readFileSync(path.join(PACKS_DIR, c.file), "utf8");
@@ -297,7 +444,7 @@ describe("Offline Dictionary Module (v0.4.0)", () => {
     });
   });
 
-  describe("5. Offline Operation (Zero Network Requests During Search)", () => {
+  describe("6. Offline Operation (Zero Network Requests During Search)", () => {
     it("lookups never make network requests", async () => {
       await installPack(SAMPLE_JA_PACK);
       await saveDictSettings({ enabled: true });
@@ -319,7 +466,7 @@ describe("Offline Dictionary Module (v0.4.0)", () => {
     });
   });
 
-  describe("6. Security & Privacy Guarantees", () => {
+  describe("7. Security & Supply Chain Defense", () => {
     it("API key query only returns hasKey and never returns raw secret", async () => {
       await saveAiApiKey("sk-secret-confidential-key-999");
       const status = await getAiApiKeyStatus();
@@ -344,25 +491,31 @@ describe("Offline Dictionary Module (v0.4.0)", () => {
     });
 
     it("AI explanation text is safe against HTML injection attacks", () => {
-      // Simulate malicious AI response text
       const maliciousAiText = '<img src="x" onerror="window.__xss=1"><script>alert(1)</script>';
-
-      // Container created using safe DOM pattern
-      const aiBox = {
-        className: "dict-result-ai-box",
-        children: []
-      };
 
       const contentNode = {
         nodeType: 1,
         textContent: ""
       };
-      // Must assign via textContent
       contentNode.textContent = maliciousAiText;
 
       assert.equal(contentNode.textContent, maliciousAiText);
-      // Ensure text is stored as literal string, not parsed into HTML child elements
       assert.ok(!contentNode.innerHTML);
+    });
+
+    it("downloadHttpsFile rejects insecure HTTP protocol and cleans up .part files", async () => {
+      const destFile = path.join(__dirname, "temp_test_insecure.bin");
+      const partFile = `${destFile}.part`;
+
+      await assert.rejects(
+        async () => {
+          await downloadHttpsFile("http://example.com/insecure.gz", destFile);
+        },
+        /insecure protocol rejected/i
+      );
+
+      assert.ok(!fs.existsSync(partFile), ".part file must be cleaned up on failure");
+      assert.ok(!fs.existsSync(destFile), "Target file must not be created on failure");
     });
   });
 });

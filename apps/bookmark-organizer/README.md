@@ -162,7 +162,32 @@ chrome.storage.local / localStorage (LIGHTWEIGHT PREFERENCES)
   - `dict-service.js`: High-level dictionary service and on-demand BYOK AI explanation
   - `packs/`: Bundled dictionary packs (JMdict_e for Japanese, Open English WordNet for English) and manifest
 - `scripts/build-dictionary-packs.js`: Reproducible script to validate, hash (SHA-256), and bundle dictionary data packs
-- `tests/`: Automated unit and integration test suite (`node --test`) verified with 100% pass rate (198 tests)
+- `tests/`: Automated unit and integration test suite (`node --test`) verified with 100% pass rate (198+ tests)
+
+## Testing & Dictionary Tooling
+
+### 1. Standard Offline Tests (CI-Ready, No Network, No Cache Required)
+```bash
+npm test
+```
+Runs the full unit and regression test suite across all modules (storage, themes, solar calculations, import/export, bookmarks, groups, and offline dictionary engine). Standard tests are 100% self-contained and run in a fresh clone without `.cache/dictionary` or internet access.
+
+### 2. Dictionary Verification
+```bash
+npm run dictionary:verify
+```
+Validates committed dictionary manifest metadata, chunk sizes, hex SHA-256 checksums, and executes smoke lookups for Japanese and English words.
+
+### 3. Upstream Integration & Live Fetch (Requires Internet)
+```bash
+npm run dictionary:test-fetch
+```
+Performs a live HTTPS connectivity and TLS verification check against official dictionary distribution endpoints (EDRDG and Open English WordNet) without mutating local state.
+
+```bash
+npm run dictionary:integration
+```
+Executes the full end-to-end pipeline: fetches latest official dictionary releases over HTTPS, builds chunked packs with deterministic checksums, and verifies output integrity.
 
 ## Version 0.4.0 Features
 

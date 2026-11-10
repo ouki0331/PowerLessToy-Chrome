@@ -45,7 +45,29 @@ export async function verifyDictionaryPacks() {
   const jaMeta = manifest.packs.ja_jmdict;
   const enMeta = manifest.packs.en_wordnet;
 
-  // 1. Verify Entry Counts
+  // 1. Verify Source Metadata
+  for (const [key, pack] of Object.entries({ ja_jmdict: jaMeta, en_wordnet: enMeta })) {
+    console.log(`[dictionary:verify] Verifying source metadata for ${key}...`);
+    if (!pack.sourceSha256 || !/^[a-f0-9]{64}$/i.test(pack.sourceSha256)) {
+      throw new Error(`Invalid or missing sourceSha256 in ${key}: ${pack.sourceSha256}`);
+    }
+    if (typeof pack.sourceFileSize !== "number" || pack.sourceFileSize < 5000000) {
+      throw new Error(`Invalid sourceFileSize in ${key}: ${pack.sourceFileSize}`);
+    }
+    if (!pack.sourceDownloadedAt || isNaN(Date.parse(pack.sourceDownloadedAt))) {
+      throw new Error(`Invalid sourceDownloadedAt timestamp in ${key}: ${pack.sourceDownloadedAt}`);
+    }
+    const chunkEntrySum = pack.chunks.reduce((s, c) => s + c.entryCount, 0);
+    if (chunkEntrySum !== pack.entryCount) {
+      throw new Error(`Chunk entry count sum (${chunkEntrySum}) does not match entryCount (${pack.entryCount}) in ${key}`);
+    }
+    const chunkSizeSum = pack.chunks.reduce((s, c) => s + c.size, 0);
+    if (chunkSizeSum !== pack.totalSizeBytes) {
+      throw new Error(`Chunk size sum (${chunkSizeSum}) does not match totalSizeBytes (${pack.totalSizeBytes}) in ${key}`);
+    }
+  }
+
+  // 2. Verify Entry Counts
   console.log(`[dictionary:verify] Japanese entry count: ${jaMeta.entryCount}`);
   if (jaMeta.entryCount < 200000) {
     throw new Error(`Japanese dictionary entry count (${jaMeta.entryCount}) is too small; expected > 200,000.`);
@@ -56,7 +78,7 @@ export async function verifyDictionaryPacks() {
     throw new Error(`English dictionary entry count (${enMeta.entryCount}) is too small; expected > 120,000.`);
   }
 
-  // 2. Verify Chunks & SHA-256 for Japanese
+  // 3. Verify Chunks & SHA-256 for Japanese
   console.log(`[dictionary:verify] Checking ${jaMeta.chunks.length} Japanese chunks...`);
   const jaIds = new Set();
   const jaWords = new Map();

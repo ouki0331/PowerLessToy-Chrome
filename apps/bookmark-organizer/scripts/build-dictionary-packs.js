@@ -39,7 +39,7 @@ function computeFileSha256(filePath) {
 /**
  * 1. Build Japanese JMdict Pack from JMdict_e.gz
  */
-async function buildJapanesePack() {
+async function buildJapanesePack(sourceMeta = {}) {
   const gzPath = path.join(CACHE_DIR, "JMdict_e.gz");
   if (!fs.existsSync(gzPath)) {
     throw new Error(`JMdict archive not found at ${gzPath}. Run npm run dictionary:fetch first.`);
@@ -158,21 +158,29 @@ async function buildJapanesePack() {
     }
   }
 
-  // Flush remaining entries
   flushChunk();
+
+  const totalSizeBytes = chunkMetas.reduce((sum, c) => sum + c.size, 0);
+  const version = sourceMeta.downloadedAt
+    ? sourceMeta.downloadedAt.slice(0, 10).replace(/-/g, ".")
+    : "2026.11.10";
 
   console.log(`[dictionary:build] Completed JMdict: ${totalEntries} entries across ${chunkMetas.length} chunks.`);
   return {
     packId: "ja_jmdict",
     language: "ja",
     name: "JMdict (Japanese-English)",
-    version: "2026.11.10",
+    version,
     source: "Electronic Dictionary Research and Development Group (EDRDG)",
-    sourceUrl: "https://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz",
+    sourceUrl: sourceMeta.url || "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
     sourceVersion: "JMdict_e Rev 1.09",
+    sourceDownloadedAt: sourceMeta.downloadedAt || new Date().toISOString(),
+    sourceFileSize: sourceMeta.fileSize || 0,
+    sourceSha256: sourceMeta.sha256 || "",
     license: "CC BY-SA 4.0",
     attribution: "This work uses the JMdict dictionary file, property of the Electronic Dictionary Research and Development Group, used in accordance with the Creative Commons Attribution-ShareAlike 4.0 International license.",
     entryCount: totalEntries,
+    totalSizeBytes,
     chunkCount: chunkMetas.length,
     chunks: chunkMetas
   };
@@ -181,7 +189,7 @@ async function buildJapanesePack() {
 /**
  * 2. Build English WordNet Pack from Open English WordNet 2025
  */
-async function buildEnglishPack() {
+async function buildEnglishPack(sourceMeta = {}) {
   const zipPath = path.join(CACHE_DIR, "english-wordnet-2025-json.zip");
   if (!fs.existsSync(zipPath)) {
     throw new Error(`WordNet archive not found at ${zipPath}. Run npm run dictionary:fetch first.`);
@@ -294,6 +302,8 @@ async function buildEnglishPack() {
 
   flushChunk();
 
+  const totalSizeBytes = chunkMetas.reduce((sum, c) => sum + c.size, 0);
+
   console.log(`[dictionary:build] Completed Open English WordNet: ${totalEntries} entries across ${chunkMetas.length} chunks.`);
   return {
     packId: "en_wordnet",
@@ -301,11 +311,15 @@ async function buildEnglishPack() {
     name: "Open English WordNet",
     version: "2025.1",
     source: "Global WordNet Association / Open English WordNet",
-    sourceUrl: "https://en-word.net/static/english-wordnet-2025-json.zip",
+    sourceUrl: sourceMeta.url || "https://en-word.net/static/english-wordnet-2025-json.zip",
     sourceVersion: "2025-edition",
+    sourceDownloadedAt: sourceMeta.downloadedAt || new Date().toISOString(),
+    sourceFileSize: sourceMeta.fileSize || 0,
+    sourceSha256: sourceMeta.sha256 || "",
     license: "CC BY 4.0",
     attribution: "Open English WordNet is distributed under the Creative Commons Attribution 4.0 International license.",
     entryCount: totalEntries,
+    totalSizeBytes,
     chunkCount: chunkMetas.length,
     chunks: chunkMetas
   };
@@ -314,9 +328,14 @@ async function buildEnglishPack() {
 export async function buildDictionaryPacks() {
   fs.mkdirSync(CHUNKS_DIR, { recursive: true });
 
+  const metaPath = path.join(CACHE_DIR, "fetch-meta.json");
+  const fetchMeta = fs.existsSync(metaPath)
+    ? JSON.parse(fs.readFileSync(metaPath, "utf8"))
+    : {};
+
   console.log("[dictionary:build] Starting dictionary build from official upstream archives...");
-  const jaMeta = await buildJapanesePack();
-  const enMeta = await buildEnglishPack();
+  const jaMeta = await buildJapanesePack(fetchMeta.ja);
+  const enMeta = await buildEnglishPack(fetchMeta.en);
 
   const manifest = {
     schemaVersion: "2.0.0",

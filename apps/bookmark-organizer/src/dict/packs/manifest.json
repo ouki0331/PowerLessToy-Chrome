@@ -1,6 +1,6 @@
 {
   "schemaVersion": "2.0.0",
-  "generatedAt": "2026-11-10T11:34:43.655Z",
+  "generatedAt": "2026-11-10T12:52:07.912Z",
   "supportedLanguages": [
     "ja",
     "en"
@@ -16,11 +16,15 @@
       "name": "JMdict (Japanese-English)",
       "version": "2026.11.10",
       "source": "Electronic Dictionary Research and Development Group (EDRDG)",
-      "sourceUrl": "https://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz",
+      "sourceUrl": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
       "sourceVersion": "JMdict_e Rev 1.09",
+      "sourceDownloadedAt": "2026-11-10T11:30:07.979Z",
+      "sourceFileSize": 10595231,
+      "sourceSha256": "8e511b59c1efb57d7dc90f58f386058035ca662cb4a23d5693b5e185190c5ede",
       "license": "CC BY-SA 4.0",
       "attribution": "This work uses the JMdict dictionary file, property of the Electronic Dictionary Research and Development Group, used in accordance with the Creative Commons Attribution-ShareAlike 4.0 International license.",
       "entryCount": 219044,
+      "totalSizeBytes": 46816700,
       "chunkCount": 22,
       "chunks": [
         {
@@ -165,9 +169,13 @@
       "source": "Global WordNet Association / Open English WordNet",
       "sourceUrl": "https://en-word.net/static/english-wordnet-2025-json.zip",
       "sourceVersion": "2025-edition",
+      "sourceDownloadedAt": "2026-11-10T11:30:07.996Z",
+      "sourceFileSize": 9986555,
+      "sourceSha256": "7d749f6e2c39e6970e4997839dcf6e42fd281f3c2fae0171d2192bae8cfa4b51",
       "license": "CC BY 4.0",
       "attribution": "Open English WordNet is distributed under the Creative Commons Attribution 4.0 International license.",
       "entryCount": 128009,
+      "totalSizeBytes": 39684603,
       "chunkCount": 13,
       "chunks": [
         {

@@ -3878,11 +3878,20 @@ async function handleInstallPack(packId) {
     });
     updatePackUI(lang, true);
   } catch (err) {
-    alert(`Pack install failed: ${err.message}`);
+    const installedPacks = await getInstalledPacks().catch(() => []);
+    const stillInstalled = installedPacks.some((p) => p.packId === packId);
+    if (stillInstalled) {
+      alert(`Pack update failed: ${err.message}\nPrevious installed version is still active and usable.`);
+    } else {
+      alert(`Pack install failed: ${err.message}`);
+    }
   } finally {
+    const installedPacks = await getInstalledPacks().catch(() => []);
+    const isInstalled = installedPacks.some((p) => p.packId === packId);
+    updatePackUI(lang, isInstalled);
     if (btn) {
       btn.disabled = false;
-      btn.textContent = t("dictReinstallBtn");
+      btn.textContent = isInstalled ? (t("dictReinstallBtn") || "Reinstall") : (t("dictInstallBtn") || "Install Pack");
     }
   }
 }

@@ -9,7 +9,7 @@
  */
 
 export const DICT_DB_NAME = "powerless_toy_dict_v1";
-export const DICT_DB_VERSION = 1;
+export const DICT_DB_VERSION = 2;
 
 export const DICT_STORES = {
   PACKS: "packs",
