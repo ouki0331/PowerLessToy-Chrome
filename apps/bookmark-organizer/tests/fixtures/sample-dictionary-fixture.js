@@ -1,16 +1,16 @@
 /**
- * Seed authentic dictionary pack data for JMdict (Japanese) and Open English WordNet (English).
+ * TEST FIXTURE ONLY (tests/fixtures/sample-dictionary-fixture.js)
+ *
+ * Minimal mock sample dictionary data used exclusively for unit testing
+ * storage operations, rollback behaviors, and search logic without requiring
+ * multi-megabyte official dictionary files in test suites.
+ *
+ * DO NOT USE FOR PRODUCTION BUILDS.
+ * Official production packs are built exclusively from official upstream archives
+ * via scripts/build-dictionary-packs.js.
  */
 
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { buildPacksManifest } from "./build-dictionary-packs.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PACKS_DIR = path.resolve(__dirname, "../src/dict/packs");
-
-const jaEntries = [
+export const SAMPLE_JA_ENTRIES = [
   { id: "ja_0001", word: "日本", reading: "にほん", pos: ["n"], senses: [{ glosses: ["Japan"], misc: [] }], common: true },
   { id: "ja_0002", word: "日本語", reading: "にほんご", pos: ["n"], senses: [{ glosses: ["Japanese language"], misc: [] }], common: true },
   { id: "ja_0003", word: "辞書", reading: "じしょ", pos: ["n"], senses: [{ glosses: ["dictionary", "lexicon"], misc: [] }], common: true },
@@ -336,41 +336,28 @@ const enEntries = [
   }
 ];
 
-const jaPack = {
+export const SAMPLE_JA_PACK = {
   packId: "ja_jmdict",
   language: "ja",
-  name: "JMdict (Japanese-English)",
-  version: "1.0.0",
-  generatedAt: new Date().toISOString(),
+  name: "JMdict (Test Sample)",
+  version: "1.0.0-sample",
   source: "Electronic Dictionary Research and Development Group (EDRDG)",
   sourceUrl: "https://ftp.edrdg.org/pub/Nihongo/00INDEX.html",
-  sourceVersion: "2024-10",
   license: "CC BY-SA 4.0",
-  attribution: "This work uses the JMdict dictionary file, property of the Electronic Dictionary Research and Development Group, used in accordance with the Creative Commons Attribution-ShareAlike 4.0 International license.",
-  entries: jaEntries
+  attribution: "Test sample fixture.",
+  entries: SAMPLE_JA_ENTRIES
 };
 
-const enPack = {
+export const SAMPLE_EN_PACK = {
   packId: "en_wordnet",
   language: "en",
-  name: "Open English WordNet",
-  version: "1.0.0",
-  generatedAt: new Date().toISOString(),
+  name: "Open English WordNet (Test Sample)",
+  version: "1.0.0-sample",
   source: "Global WordNet Association / Open English WordNet",
-  sourceUrl: "https://github.com/globalwordnet/english-wordnet/releases",
-  sourceVersion: "2024-edition",
+  sourceUrl: "https://en-word.net/",
   license: "CC BY 4.0",
-  attribution: "Open English WordNet is distributed under the Creative Commons Attribution 4.0 International license.",
+  attribution: "Test sample fixture.",
   entries: enEntries
 };
 
-fs.writeFileSync(path.join(PACKS_DIR, "dict_ja_jmdict.json"), JSON.stringify(jaPack, null, 2), "utf8");
-fs.writeFileSync(path.join(PACKS_DIR, "dict_en_wordnet.json"), JSON.stringify(enPack, null, 2), "utf8");
-
-const manifest = buildPacksManifest([
-  path.join(PACKS_DIR, "dict_ja_jmdict.json"),
-  path.join(PACKS_DIR, "dict_en_wordnet.json")
-]);
-fs.writeFileSync(path.join(PACKS_DIR, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
-
-console.log(`Seeded JA (${jaEntries.length}) and EN (${enEntries.length}) dictionary packs.`);
+export const SAMPLE_EN_ENTRIES = enEntries;

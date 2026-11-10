@@ -1496,10 +1496,22 @@
             if (aiResp?.success && aiResp.result?.text) {
               aiBoxContainer.className = "pt-dict-ai-box";
               aiBoxContainer.style.display = "block";
-              aiBoxContainer.innerHTML = `
-                <div class="pt-dict-ai-box-badge">${ICONS.sparkles} ${getI18n().dictAiExplanationTitle || "AI Context Explanation"} (${aiResp.result.provider})</div>
-                <div>${aiResp.result.text}</div>
-              `;
+              aiBoxContainer.innerHTML = "";
+
+              const badge = document.createElement("div");
+              badge.className = "pt-dict-ai-box-badge";
+              badge.innerHTML = `${ICONS.sparkles} `;
+              const badgeTitle = document.createElement("span");
+              badgeTitle.textContent = `${getI18n().dictAiExplanationTitle || "AI Context Explanation"} (${aiResp.result.provider})`;
+              badge.appendChild(badgeTitle);
+              aiBoxContainer.appendChild(badge);
+
+              const contentDiv = document.createElement("div");
+              contentDiv.className = "pt-dict-ai-box-content";
+              contentDiv.style.marginTop = "4px";
+              contentDiv.textContent = aiResp.result.text;
+              aiBoxContainer.appendChild(contentDiv);
+
               aiBtn.style.display = "none";
             } else {
               aiBtn.disabled = false;

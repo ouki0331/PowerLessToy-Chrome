@@ -1,6 +1,6 @@
 {
-  "schemaVersion": "1.0.0",
-  "updatedAt": "2026-11-09T15:43:11.542Z",
+  "schemaVersion": "2.0.0",
+  "generatedAt": "2026-11-10T11:34:43.655Z",
   "supportedLanguages": [
     "ja",
     "en"
@@ -14,33 +14,241 @@
       "packId": "ja_jmdict",
       "language": "ja",
       "name": "JMdict (Japanese-English)",
-      "version": "1.0.0",
-      "generatedAt": "2026-11-09T15:43:11.536Z",
+      "version": "2026.11.10",
       "source": "Electronic Dictionary Research and Development Group (EDRDG)",
-      "sourceUrl": "https://ftp.edrdg.org/pub/Nihongo/00INDEX.html",
-      "sourceVersion": "2024-10",
+      "sourceUrl": "https://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz",
+      "sourceVersion": "JMdict_e Rev 1.09",
       "license": "CC BY-SA 4.0",
       "attribution": "This work uses the JMdict dictionary file, property of the Electronic Dictionary Research and Development Group, used in accordance with the Creative Commons Attribution-ShareAlike 4.0 International license.",
-      "checksum": "d1601887a1a5e554a475a17b79cb1bb89b47655047e54379d20512df9034484f",
-      "fileSize": 21521,
-      "entryCount": 65,
-      "file": "dict_ja_jmdict.json"
+      "entryCount": 219044,
+      "chunkCount": 22,
+      "chunks": [
+        {
+          "file": "chunks/ja_jmdict_chunk_001.json",
+          "entryCount": 10000,
+          "size": 2181885,
+          "checksum": "5647b295ea2c2e7373286d5ef764a0ef684f690c4622848f0b49b2d4d7f300e8"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_002.json",
+          "entryCount": 10000,
+          "size": 2119721,
+          "checksum": "b9d08ef2801f09ca0d632b5f93bde4f9808c90e11ef289f8eb19f05a319a6b6b"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_003.json",
+          "entryCount": 10000,
+          "size": 2127309,
+          "checksum": "e76d2c66001dc7d37903f2f59b5e49f10846b47569865719c7225a6668c8693e"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_004.json",
+          "entryCount": 10000,
+          "size": 2178553,
+          "checksum": "d08df8a051ab2597ddc36047968d7b89bccac3ca59ef3d28141942bbe19164f1"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_005.json",
+          "entryCount": 10000,
+          "size": 2149512,
+          "checksum": "356425ac59707bd57f99b01935d79065c3b6e1de260c64242f45943a87e45903"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_006.json",
+          "entryCount": 10000,
+          "size": 2268984,
+          "checksum": "9e0ddbb5532d27ea08239ee4d203f5c697b0e110c2a6c6c55f44937fa056f05b"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_007.json",
+          "entryCount": 10000,
+          "size": 2021981,
+          "checksum": "2256d91ad1cb17688c52c84c1d7542a9933964b182040b15905d1333e07391ef"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_008.json",
+          "entryCount": 10000,
+          "size": 2019119,
+          "checksum": "432a436d0734a7671049c92d2a8c2e7932152135fa8720fa8e03db7eeb8ce8d8"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_009.json",
+          "entryCount": 10000,
+          "size": 2017336,
+          "checksum": "a06bcb2309de3ab952919e61b3f9d0a7fa1e74424575a04c631214e1ab00cb02"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_010.json",
+          "entryCount": 10000,
+          "size": 2197968,
+          "checksum": "2de149e888d387abf579dbe52719e5c5a45456b0eed9535d011ccc4eae5249cb"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_011.json",
+          "entryCount": 10000,
+          "size": 2187098,
+          "checksum": "d713d1b26fbd73bf72252f4803a0cd1af175cb457c87ebd4bc7bd37a13844532"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_012.json",
+          "entryCount": 10000,
+          "size": 2175098,
+          "checksum": "b3a8a438f234195ba0b8009b3b472d87fa99c1af11c3863b24f35af157d30e02"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_013.json",
+          "entryCount": 10000,
+          "size": 2103916,
+          "checksum": "c9c13f4c1ff9fc6a86503f5469361792900fef1beb81340522d19ed0b1521f5e"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_014.json",
+          "entryCount": 10000,
+          "size": 2076524,
+          "checksum": "246343ecf73bcde302710d951b328c40f1156eb5f02dcb343bc78cb11b61818e"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_015.json",
+          "entryCount": 10000,
+          "size": 2178443,
+          "checksum": "7103ccc883134c76ae7effe91b87c4be4e01d75d2a319793e690b571c6b8e800"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_016.json",
+          "entryCount": 10000,
+          "size": 2144930,
+          "checksum": "02b336f854134e3312e612e983828f3246ded67ddf959b5f1e15856c8e3c50dd"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_017.json",
+          "entryCount": 10000,
+          "size": 2149700,
+          "checksum": "4b5ffd63fef291ac61e19f0326adb16e4af610d9ed26da82e877ef95903b1497"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_018.json",
+          "entryCount": 10000,
+          "size": 2156154,
+          "checksum": "e88700b685dc05a0d783a9dd8ddaf98f542625ac6211554da3e3ca6eb9142005"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_019.json",
+          "entryCount": 10000,
+          "size": 2138898,
+          "checksum": "caa5eabbaa601c723e0a77a00445353405b883268611a14aa5de0eb29ca96277"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_020.json",
+          "entryCount": 10000,
+          "size": 2115648,
+          "checksum": "049a363383bda93721baa46dbb0f0b41fc006b4480e7a65437d78d341a22dec9"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_021.json",
+          "entryCount": 10000,
+          "size": 2130067,
+          "checksum": "4babd4d10b28508efa2b8dc4ec97afc91f34dc6cce4a0f7d6d031b571ecb325f"
+        },
+        {
+          "file": "chunks/ja_jmdict_chunk_022.json",
+          "entryCount": 9044,
+          "size": 1977856,
+          "checksum": "7b581fb7aacdeb74e1a202a50bd9e8e9527a6b91dabf80be6b465671fad8881a"
+        }
+      ]
     },
     "en_wordnet": {
       "packId": "en_wordnet",
       "language": "en",
       "name": "Open English WordNet",
-      "version": "1.0.0",
-      "generatedAt": "2026-11-09T15:43:11.541Z",
+      "version": "2025.1",
       "source": "Global WordNet Association / Open English WordNet",
-      "sourceUrl": "https://github.com/globalwordnet/english-wordnet/releases",
-      "sourceVersion": "2024-edition",
+      "sourceUrl": "https://en-word.net/static/english-wordnet-2025-json.zip",
+      "sourceVersion": "2025-edition",
       "license": "CC BY 4.0",
       "attribution": "Open English WordNet is distributed under the Creative Commons Attribution 4.0 International license.",
-      "checksum": "451af115eb09c43d0240eb43738c54622f762d826fdb9739ba1a810ab7c31a1d",
-      "fileSize": 11043,
-      "entryCount": 20,
-      "file": "dict_en_wordnet.json"
+      "entryCount": 128009,
+      "chunkCount": 13,
+      "chunks": [
+        {
+          "file": "chunks/en_wordnet_chunk_001.json",
+          "entryCount": 10000,
+          "size": 2932464,
+          "checksum": "9af8ecc079199652ea47e962bb07016ab8bab4eed62a386c2fea73c57d6c38e6"
+        },
+        {
+          "file": "chunks/en_wordnet_chunk_002.json",
+          "entryCount": 10000,
+          "size": 3031095,
+          "checksum": "2c2c5c0a3a66eacaddcc9954671747c796effd007320f8fd427837210c6e189b"
+        },
+        {
+          "file": "chunks/en_wordnet_chunk_003.json",
+          "entryCount": 10000,
+          "size": 3188150,
+          "checksum": "5c6dff027c6bd5428f441a2aae89f8209a8b6ee861c63429969586fcd09a5d6b"
+        },
+        {
+          "file": "chunks/en_wordnet_chunk_004.json",
+          "entryCount": 10000,
+          "size": 3183559,
+          "checksum": "084d684647b4ed85a648379ee07ba86d733a961059b93d007809a06b0b17c9a4"
+        },
+        {
+          "file": "chunks/en_wordnet_chunk_005.json",
+          "entryCount": 10000,
+          "size": 3210720,
+          "checksum": "adae49bc69ec85ee8a7d9b54618de389da51a109ac73559296468efc05bdc169"
+        },
+        {
+          "file": "chunks/en_wordnet_chunk_006.json",
+          "entryCount": 10000,
+          "size": 3074576,
+          "checksum": "822ea52909dfeb2769427446792f6e4c75d274872171612de176c3f98e4ecd81"
+        },
+        {
+          "file": "chunks/en_wordnet_chunk_007.json",
+          "entryCount": 10000,
+          "size": 3004811,
+          "checksum": "38c4bbac6419beac29de612879fa468623dc83b73370ef0e1e8c58e714d21ab6"
+        },
+        {
+          "file": "chunks/en_wordnet_chunk_008.json",
+          "entryCount": 10000,
+          "size": 2963056,
+          "checksum": "c6d3aa28345976cde5a4eb77a449ba09ef7631f8d4b12957a314921f24d58170"
+        },
+        {
+          "file": "chunks/en_wordnet_chunk_009.json",
+          "entryCount": 10000,
+          "size": 3072344,
+          "checksum": "55e6b9471e7069af83534bb23a455a52e7dfbdaf9a4971afea88430fe6b73ba1"
+        },
+        {
+          "file": "chunks/en_wordnet_chunk_010.json",
+          "entryCount": 10000,
+          "size": 3211700,
+          "checksum": "d45cb656b5df6d366d48861a400bc50aeb6b54bfa5a7aca1f208101dfea9fd19"
+        },
+        {
+          "file": "chunks/en_wordnet_chunk_011.json",
+          "entryCount": 10000,
+          "size": 3290311,
+          "checksum": "1a1ceb01e10db4170933db383d0e72bc5376e1b9e9a596349161334852f932e1"
+        },
+        {
+          "file": "chunks/en_wordnet_chunk_012.json",
+          "entryCount": 10000,
+          "size": 3106294,
+          "checksum": "5380c64231d90e6862ccf4b1b90e95cec2d7bc9b86831a7718fafbf502bdc948"
+        },
+        {
+          "file": "chunks/en_wordnet_chunk_013.json",
+          "entryCount": 8009,
+          "size": 2415523,
+          "checksum": "14ce3a6f7cca17d917c2d06c27464dcc342e073fa73df37d2512851313d11574"
+        }
+      ]
     }
   }
 }

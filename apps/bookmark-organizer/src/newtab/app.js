@@ -66,11 +66,12 @@ import { SVG_ICONS, renderSvgIcon } from "./icons.js";
 import {
   getDictSettings,
   saveDictSettings,
-  getAiApiKey,
+  getAiApiKeyStatus,
   saveAiApiKey,
   searchDictionary,
   explainWithAi,
   installPack,
+  installPackFromChunks,
   uninstallPack,
   getInstalledPacks,
   clearAiCache,
@@ -3762,9 +3763,9 @@ async function openDictSettingsModal() {
   if (!elements.dictModalBackdrop) return;
   elements.dictModalBackdrop.style.display = "flex";
 
-  const [settings, apiKey, installedPacks] = await Promise.all([
+  const [settings, keyStatus, installedPacks] = await Promise.all([
     getDictSettings(),
-    getAiApiKey().catch(() => ""),
+    getAiApiKeyStatus().catch(() => ({ hasKey: false })),
     getInstalledPacks().catch(() => [])
   ]);
 
@@ -3803,11 +3804,17 @@ async function openDictSettingsModal() {
   }
 
   if (elements.dictAiApiKeyInput) {
-    elements.dictAiApiKeyInput.value = apiKey || "";
+    elements.dictAiApiKeyInput.value = "";
+    elements.dictAiApiKeyInput.placeholder = keyStatus?.hasKey
+      ? "•••••••••••••••• (API Key set. Enter new key to replace)"
+      : "Enter API Key...";
   }
 
   if (elements.dictAiKeyStatus) {
-    elements.dictAiKeyStatus.style.display = apiKey ? "block" : "none";
+    elements.dictAiKeyStatus.style.display = keyStatus?.hasKey ? "block" : "none";
+    elements.dictAiKeyStatus.textContent = keyStatus?.hasKey
+      ? "✓ API Key configured"
+      : "";
   }
 }
 
@@ -3844,12 +3851,27 @@ async function handleInstallPack(packId) {
   }
 
   try {
-    const fileName = packId === "ja_jmdict" ? "dict_ja_jmdict.json" : "dict_en_wordnet.json";
-    const packUrl = chrome.runtime.getURL(`src/dict/packs/${fileName}`);
-    const res = await fetch(packUrl);
-    if (!res.ok) throw new Error("Could not load pack file");
-    const packData = await res.json();
-    await installPack(packData);
+    const manifestUrl = chrome.runtime.getURL("src/dict/packs/manifest.json");
+    const manifestRes = await fetch(manifestUrl);
+    if (!manifestRes.ok) throw new Error("Could not load dictionary manifest");
+    const manifest = await manifestRes.json();
+    const packMeta = manifest.packs?.[packId];
+    if (!packMeta) throw new Error(`Pack ${packId} not found in manifest`);
+
+    await installPackFromChunks(packMeta, async (chunkFile) => {
+      const chunkUrl = chrome.runtime.getURL(`src/dict/packs/${chunkFile}`);
+      const res = await fetch(chunkUrl);
+      if (!res.ok) throw new Error(`Could not load chunk file: ${chunkFile}`);
+      return await res.text();
+    }, {
+      onProgress: (current, total) => {
+        if (btn) {
+          const pct = Math.round((current / total) * 100);
+          btn.textContent = `${t("dictInstalling")} (${pct}%)`;
+        }
+      }
+    });
+
     const settings = await getDictSettings();
     await saveDictSettings({
       installedPacks: { ...settings.installedPacks, [packId]: true }
@@ -3999,7 +4021,17 @@ async function renderDictionaryInSpotlight(query, reqId) {
           if (aiRes?.text) {
             aiBox.className = "dict-result-ai-box";
             aiBox.style.display = "block";
-            aiBox.innerHTML = `<strong>${t("dictAiExplanationTitle")} (${aiRes.provider})</strong><div style="margin-top: 4px;">${aiRes.text}</div>`;
+            aiBox.innerHTML = "";
+
+            const title = document.createElement("strong");
+            title.textContent = `${t("dictAiExplanationTitle")} (${aiRes.provider})`;
+            aiBox.appendChild(title);
+
+            const contentDiv = document.createElement("div");
+            contentDiv.style.marginTop = "4px";
+            contentDiv.textContent = aiRes.text;
+            aiBox.appendChild(contentDiv);
+
             aiBtn.style.display = "none";
           }
         } catch (err) {

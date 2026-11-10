@@ -17,6 +17,7 @@ import {
   lookupWord,
   getInstalledPacks,
   installPack,
+  installPackFromChunks,
   uninstallPack,
   getAiCache,
   setAiCache,
@@ -103,6 +104,11 @@ export async function saveDictSettings(patch) {
  */
 export async function getAiApiKey() {
   return (await getStorageItem(DICT_AI_KEY_STORAGE_KEY)) || "";
+}
+
+export async function getAiApiKeyStatus() {
+  const key = await getAiApiKey();
+  return { hasKey: Boolean(key) };
 }
 
 export async function saveAiApiKey(key) {
@@ -288,6 +294,7 @@ export async function explainWithAi({
 
 export {
   installPack,
+  installPackFromChunks,
   uninstallPack,
   getInstalledPacks,
   clearAiCache,

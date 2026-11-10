@@ -24,6 +24,7 @@ import {
   searchDictionary,
   explainWithAi,
   installPack,
+  installPackFromChunks,
   uninstallPack,
   getInstalledPacks,
   clearAiCache,
@@ -372,7 +373,7 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
       (async () => {
         try {
           const key = await getAiApiKey();
-          sendResponse({ success: true, hasKey: Boolean(key), key });
+          sendResponse({ success: true, hasKey: Boolean(key) });
         } catch (err) {
           sendResponse({ success: false, error: err.message });
         }
@@ -408,12 +409,20 @@ if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
       (async () => {
         try {
           const packId = message.packId;
-          const fileName = packId === "ja_jmdict" ? "dict_ja_jmdict.json" : "dict_en_wordnet.json";
-          const packUrl = chrome.runtime.getURL(`src/dict/packs/${fileName}`);
-          const res = await fetch(packUrl);
-          if (!res.ok) throw new Error(`Could not load pack file: ${fileName}`);
-          const packData = await res.json();
-          await installPack(packData);
+          const manifestUrl = chrome.runtime.getURL("src/dict/packs/manifest.json");
+          const manifestRes = await fetch(manifestUrl);
+          if (!manifestRes.ok) throw new Error("Could not load dictionary manifest");
+          const manifest = await manifestRes.json();
+          const packMeta = manifest.packs?.[packId];
+          if (!packMeta) throw new Error(`Pack ${packId} not found in manifest`);
+
+          await installPackFromChunks(packMeta, async (chunkFile) => {
+            const chunkUrl = chrome.runtime.getURL(`src/dict/packs/${chunkFile}`);
+            const res = await fetch(chunkUrl);
+            if (!res.ok) throw new Error(`Could not load chunk file: ${chunkFile}`);
+            return await res.text();
+          });
+
           const settings = await getDictSettings();
           await saveDictSettings({
             installedPacks: { ...settings.installedPacks, [packId]: true }
