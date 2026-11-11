@@ -143,18 +143,126 @@ export async function getShortcutBindingStatus() {
 }
 
 /**
+ * Fallback to opening Bookmark Organizer new tab page with search overlay.
+ * Logs structured diagnostic warning without recording sensitive data.
+ */
+export async function fallbackToNewtabSearch(initialQuery = "", warnInfo = null) {
+  if (warnInfo) {
+    console.warn(
+      `[Bookmark Organizer] Overlay injection fallback: tabId=${warnInfo.tabId ?? "unknown"}, urlType=${warnInfo.urlType ?? "unknown"}, phase=${warnInfo.phase ?? "unknown"}, error=${warnInfo.error ?? "none"}`
+    );
+  }
+  const queryParam = initialQuery ? `search=${encodeURIComponent(initialQuery)}` : "search";
+  try {
+    return await chrome.tabs.create({
+      url: chrome.runtime.getURL(`src/newtab/index.html#${queryParam}`)
+    });
+  } catch (err) {
+    console.warn("[Bookmark Organizer] Failed to open fallback new tab:", err);
+  }
+}
+
+/**
+ * Execute script injection with at most one bounded retry on navigation / loading failure.
+ */
+export async function executeInjectionWithRetry(tabId, messagePayload, attempt = 1, knownTab = null) {
+  let tab = knownTab;
+  if (!tab && typeof chrome !== "undefined" && typeof chrome.tabs?.get === "function") {
+    try {
+      tab = await chrome.tabs.get(tabId);
+    } catch (err) {
+      return await fallbackToNewtabSearch(messagePayload.initialQuery, {
+        tabId,
+        urlType: "closed",
+        phase: "pre-inject-get-tab",
+        error: err.message
+      });
+    }
+  }
+  if (!tab) {
+    tab = { id: tabId, url: "https://unknown" };
+  }
+
+  if (!tab.url) {
+    return await fallbackToNewtabSearch(messagePayload.initialQuery, {
+      tabId,
+      urlType: "empty",
+      phase: "pre-inject-url-check",
+      error: "Tab has no valid URL"
+    });
+  }
+
+  if (isRestrictedUrl(tab.url)) {
+    return await fallbackToNewtabSearch(messagePayload.initialQuery, {
+      tabId,
+      urlType: "restricted",
+      phase: "pre-inject-restricted-check",
+      error: "Target tab is restricted URL"
+    });
+  }
+
+  if (!chrome.scripting?.executeScript) {
+    return await fallbackToNewtabSearch(messagePayload.initialQuery, {
+      tabId,
+      urlType: "webpage",
+      phase: "api-check",
+      error: "chrome.scripting.executeScript unavailable"
+    });
+  }
+
+  try {
+    // 1. Inject overlay.js (does NOT auto-open)
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["src/content/overlay.js"]
+    });
+
+    // 2. Send single open message and await success
+    const res = await chrome.tabs.sendMessage(tabId, messagePayload);
+    if (res?.success) {
+      return res;
+    }
+    throw new Error(res?.error || "Overlay returned unsuccessful status");
+  } catch (err) {
+    // Bounded retry: retry at most once if still active and on the same document
+    if (attempt === 1) {
+      try {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (activeTab && activeTab.id === tabId && !isRestrictedUrl(activeTab.url)) {
+          return await executeInjectionWithRetry(tabId, messagePayload, 2, activeTab);
+        }
+      } catch {}
+    }
+
+    // Final failure: log warning and fallback
+    const finalTab = typeof chrome.tabs?.get === "function" ? await chrome.tabs.get(tabId).catch(() => null) : tab;
+    const urlType = finalTab ? (isRestrictedUrl(finalTab.url) ? "restricted" : "webpage") : "closed";
+    return await fallbackToNewtabSearch(messagePayload.initialQuery, {
+      tabId,
+      urlType,
+      phase: attempt === 1 ? "inject-or-message" : "retry-inject-or-message",
+      error: err.message
+    });
+  }
+}
+
+/**
  * Main trigger router for shortcut or action icon.
  */
-export async function handleTriggerOverlay(targetTab = null, { initialQuery = "" } = {}) {
+export async function handleTriggerOverlay(targetTab = null, { initialQuery = "", triggerSource = "shortcut" } = {}) {
   let tab = targetTab;
   if (!tab || !tab.id) {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    tab = tabs?.[0] || null;
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      tab = tabs?.[0] || null;
+    } catch (err) {
+      console.warn("[Bookmark Organizer] Failed to query active tab:", err);
+      return;
+    }
   }
   if (!tab || !tab.id) return;
 
   const url = tab.url || "";
-  const queryParam = initialQuery ? `search=${encodeURIComponent(initialQuery)}` : "search";
 
   // 1. Bookmark Organizer new tab page -> Trigger native spotlight search
   if (isBookmarkOrganizerUrl(url)) {
@@ -178,72 +286,58 @@ export async function handleTriggerOverlay(targetTab = null, { initialQuery = ""
 
   // 2. Restricted browser page -> Fallback: Open Bookmark Organizer with search overlay
   if (isRestrictedUrl(url)) {
-    await chrome.tabs.create({
-      url: chrome.runtime.getURL(`src/newtab/index.html#${queryParam}`)
-    });
+    await fallbackToNewtabSearch(initialQuery);
     return;
   }
 
-  // 3. Normal webpage -> Toggle or on-demand inject in-page overlay
+  const messagePayload = {
+    type: "OPEN_BOOKMARK_ORGANIZER_OVERLAY",
+    initialQuery,
+    triggerSource
+  };
+
+  // 3. Normal webpage -> Attempt to send message to existing overlay first
   try {
-    await chrome.tabs.sendMessage(tab.id, {
-      type: "TOGGLE_BOOKMARK_ORGANIZER_OVERLAY",
-      initialQuery
-    });
-  } catch {
-    // Content script not yet present in this tab -> inject on demand
-    try {
-      if (chrome.scripting?.executeScript) {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ["src/content/overlay.js"]
-        });
-        // Send initialQuery after injection
-        setTimeout(() => {
-          if (typeof chrome !== "undefined" && chrome.tabs?.sendMessage) {
-            chrome.tabs.sendMessage(tab.id, {
-              type: "TOGGLE_BOOKMARK_ORGANIZER_OVERLAY",
-              initialQuery
-            }).catch(() => {});
-          }
-        }, 150);
-      } else {
-        await chrome.tabs.create({
-          url: chrome.runtime.getURL(`src/newtab/index.html#${queryParam}`)
-        });
-      }
-    } catch (err) {
-      console.warn("Failed to inject overlay, falling back to new tab:", err);
-      await chrome.tabs.create({
-        url: chrome.runtime.getURL(`src/newtab/index.html#${queryParam}`)
-      });
+    const response = await chrome.tabs.sendMessage(tab.id, messagePayload);
+    if (response?.success) {
+      return;
     }
+  } catch {
+    // Content script not yet active in this tab -> Proceed to controlled injection
   }
+
+  await executeInjectionWithRetry(tab.id, messagePayload, 1, tab);
 }
 
 // Shortcut listener (Commands API)
 if (typeof chrome !== "undefined" && chrome.commands?.onCommand) {
-  chrome.commands.onCommand.addListener(async (command) => {
+  chrome.commands.onCommand.addListener((command) => {
     if (command === "open-bookmark-search") {
-      await handleTriggerOverlay();
+      handleTriggerOverlay(null, { triggerSource: "shortcut" }).catch((err) => {
+        console.warn("[Bookmark Organizer] Error in shortcut handler:", err);
+      });
     }
   });
 }
 
 // Action icon click listener (when default_popup is omitted)
 if (typeof chrome !== "undefined" && chrome.action?.onClicked) {
-  chrome.action.onClicked.addListener(async (tab) => {
-    await handleTriggerOverlay(tab);
+  chrome.action.onClicked.addListener((tab) => {
+    handleTriggerOverlay(tab, { triggerSource: "action" }).catch((err) => {
+      console.warn("[Bookmark Organizer] Error in action handler:", err);
+    });
   });
 }
 
 // Context Menu listener
 if (typeof chrome !== "undefined" && chrome.contextMenus?.onClicked) {
-  chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === CONTEXT_MENU_ID && info.selectionText) {
       const text = info.selectionText.trim();
       if (text) {
-        await handleTriggerOverlay(tab, { initialQuery: `dict ${text}` });
+        handleTriggerOverlay(tab, { initialQuery: `dict ${text}`, triggerSource: "contextMenu" }).catch((err) => {
+          console.warn("[Bookmark Organizer] Error in context menu handler:", err);
+        });
       }
     }
   });

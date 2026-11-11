@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PowerLessToy Bookmark Organizer",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Organize and access project environments and everyday links on Chrome new tab.",
   "chrome_url_overrides": {
     "newtab": "src/newtab/index.html"
@@ -16,11 +16,6 @@
   "options_ui": {
     "page": "src/options/index.html",
     "open_in_tab": false
-  },
-  "background": {
-    "service_worker": "src/background/index.js",
-    "type": "module",
-    "scripts": ["src/background/index.js"]
   },
   "commands": {
     "open-bookmark-search": {
@@ -43,20 +38,8 @@
     "https://api.openai.com/*",
     "https://generativelanguage.googleapis.com/*"
   ],
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "bookmark-organizer@powerless-toy.local",
-      "strict_min_version": "142.0",
-      "data_collection_permissions": {
-        "required": [
-          "none"
-        ]
-      }
-    }
-  },
-  "icons": {
-    "16": "assets/icons/icon-16.png",
-    "48": "assets/icons/icon-48.png",
-    "128": "assets/icons/icon-128.png"
+  "background": {
+    "service_worker": "src/background/index.js",
+    "type": "module"
   }
 }

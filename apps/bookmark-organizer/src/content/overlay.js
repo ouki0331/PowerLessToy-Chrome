@@ -19,11 +19,8 @@
     return;
   }
 
-  // If already loaded in page, wire toggle helper and exit
+  // If already loaded in page, exit without opening or toggling (open is driven by explicit message)
   if (window.__POWERLESS_TOY_OVERLAY_INITIALIZED__) {
-    if (typeof window.__POWERLESS_TOY_TOGGLE_OVERLAY__ === "function") {
-      window.__POWERLESS_TOY_TOGGLE_OVERLAY__();
-    }
     return;
   }
   window.__POWERLESS_TOY_OVERLAY_INITIALIZED__ = true;
@@ -2131,56 +2128,87 @@
   });
 
   /**
-   * Open & Close Life-cycle
+   * Open & Close Life-cycle (10-Step Deterministic Sequence)
    */
-  async function openOverlay() {
-    state.previousActiveElement = document.activeElement;
-    state.isOpen = true;
-    state.scope = "all";
-    state.query = "";
-    state.selectedIndex = 0;
-    els.searchInput.value = "";
-    els.clearBtn.style.display = "none";
-    els.toast.style.display = "none";
-
-    els.searchView.style.display = "flex";
-    els.captureView.style.display = "none";
-
-    host.style.display = "block";
-
-    // Fetch fresh data from extension background service worker
+  async function openOverlay(initialQuery = "") {
     try {
-      const resp = await chrome.runtime.sendMessage({ type: "GET_OVERLAY_DATA" });
-      if (resp?.success) {
-        state.data = resp.data;
-        state.linkMetrics = new Map(resp.linkMetrics || []);
-        state.groupMetrics = new Map(resp.groupMetrics || []);
-        state.lang = resp.lang || "en";
-        state.shortcutStatus = resp.shortcutStatus || null;
+      // 1. Save previousActiveElement
+      state.previousActiveElement = document.activeElement;
+
+      // 2. Set isOpen
+      state.isOpen = true;
+      state.scope = "all";
+      state.query = "";
+      state.selectedIndex = 0;
+      els.searchInput.value = "";
+      els.clearBtn.style.display = "none";
+      els.toast.style.display = "none";
+
+      // 3. Display host
+      host.style.display = "block";
+
+      // 4. Display search view
+      els.searchView.style.display = "flex";
+      els.captureView.style.display = "none";
+
+      // 5. Await latest bookmarks, metrics, lang, and shortcut status
+      try {
+        const resp = await chrome.runtime.sendMessage({ type: "GET_OVERLAY_DATA" });
+        if (resp?.success) {
+          state.data = resp.data || { categories: [], groups: [], links: [] };
+          state.linkMetrics = new Map(resp.linkMetrics || []);
+          state.groupMetrics = new Map(resp.groupMetrics || []);
+          state.lang = resp.lang || "en";
+          state.shortcutStatus = resp.shortcutStatus || null;
+        } else {
+          console.warn("[Bookmark Organizer] Background returned unsuccessful overlay data:", resp?.error);
+          if (!state.data) {
+            state.data = { categories: [], groups: [], links: [] };
+          }
+        }
+      } catch (err) {
+        console.warn("[Bookmark Organizer] Failed to load overlay data from background:", err);
+        if (!state.data) {
+          state.data = { categories: [], groups: [], links: [] };
+        }
       }
+
+      // 6. Apply initialQuery to state and input
+      if (initialQuery) {
+        state.query = initialQuery;
+        els.searchInput.value = initialQuery;
+        els.clearBtn.style.display = "flex";
+      }
+
+      // 7. Update scope labels
+      updateScopeLabels();
+
+      // 8. Render stream
+      renderStream();
+
+      // 9. Focus and select search input
+      setTimeout(() => {
+        try {
+          els.searchInput.focus();
+          els.searchInput.select();
+        } catch {}
+      }, 20);
+
+      // 10. Return success status
+      return { success: true, state: "opened" };
     } catch (err) {
-      console.warn("Failed to load overlay data from background:", err);
+      console.error("[Bookmark Organizer] openOverlay failed:", err);
+      return { success: false, error: err.message || String(err) };
     }
-
-    updateScopeLabels();
-    if (initialQuery) {
-      state.query = initialQuery;
-      els.searchInput.value = initialQuery;
-      els.clearBtn.style.display = "flex";
-    }
-    renderStream();
-
-    setTimeout(() => {
-      els.searchInput.focus();
-      els.searchInput.select();
-    }, 20);
   }
 
   function closeOverlay() {
     state.isOpen = false;
     host.style.display = "none";
     if (state.previousActiveElement && typeof state.previousActiveElement.focus === "function") {
-      state.previousActiveElement.focus();
+      try {
+        state.previousActiveElement.focus();
+      } catch {}
     }
   }
 
@@ -2199,18 +2227,65 @@
     }
   }
 
-  // Expose toggle function for subsequent injections
+  async function handleOverlayMessage(message) {
+    if (!message || typeof message !== "object") {
+      return { success: false, error: "Invalid message payload" };
+    }
+
+    const initialQuery = typeof message.initialQuery === "string" ? message.initialQuery : "";
+    const triggerSource = message.triggerSource || "shortcut";
+
+    if (!state.isOpen) {
+      return await openOverlay(initialQuery);
+    }
+
+    // Already open
+    if (initialQuery) {
+      state.query = initialQuery;
+      els.searchInput.value = initialQuery;
+      els.clearBtn.style.display = "flex";
+      renderStream();
+      return { success: true, state: "updated" };
+    }
+
+    if (triggerSource === "shortcut") {
+      toggleScope();
+      return { success: true, state: "scope-toggled" };
+    }
+
+    // Action click or other source while already open -> focus without toggling scope
+    try {
+      els.searchInput.focus();
+      els.searchInput.select();
+    } catch {}
+    return { success: true, state: "opened" };
+  }
+
+  // Expose toggle & controller for subsequent operations and tests
   window.__POWERLESS_TOY_TOGGLE_OVERLAY__ = toggleOverlay;
+  window.__POWERLESS_TOY_OVERLAY_CONTROLLER__ = {
+    openOverlay,
+    closeOverlay,
+    toggleOverlay,
+    handleMessage: handleOverlayMessage,
+    getState: () => state
+  };
 
   // Background runtime messaging listener
   if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
-    chrome.runtime.onMessage.addListener((message) => {
-      if (message?.type === "TOGGLE_BOOKMARK_ORGANIZER_OVERLAY") {
-        toggleOverlay(message.initialQuery || "");
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message?.type === "OPEN_BOOKMARK_ORGANIZER_OVERLAY" || message?.type === "TOGGLE_BOOKMARK_ORGANIZER_OVERLAY") {
+        handleOverlayMessage(message)
+          .then((res) => {
+            sendResponse(res || { success: true, state: "opened" });
+          })
+          .catch((err) => {
+            sendResponse({ success: false, error: err.message || String(err) });
+          });
+        return true; // Keep message channel open for async response
       }
     });
   }
 
-  // Initial opening upon first on-demand injection
-  openOverlay();
+  // Note: NO automatic openOverlay() on initial injection! Opening is message-driven.
 })();

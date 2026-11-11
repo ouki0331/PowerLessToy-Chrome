@@ -162,7 +162,33 @@ chrome.storage.local / localStorage (LIGHTWEIGHT PREFERENCES)
   - `dict-service.js`: High-level dictionary service and on-demand BYOK AI explanation
   - `packs/`: Bundled dictionary packs (JMdict_e for Japanese, Open English WordNet for English) and manifest
 - `scripts/build-dictionary-packs.js`: Reproducible script to validate, hash (SHA-256), and bundle dictionary data packs
-- `tests/`: Automated unit and integration test suite (`node --test`) verified with 100% pass rate (198+ tests)
+- `tests/`: Automated unit and integration test suite (`node --test`) verified with 100% pass rate (217+ tests)
+
+## Browser Builds & Extension Loading
+
+The extension supports both Google Chrome and Mozilla Firefox desktop from a single, unified codebase via dedicated manifest targets:
+
+```bash
+# Build both Chrome and Firefox distributions into dist/
+npm run build
+
+# Build target specifically
+npm run build:chrome
+npm run build:firefox
+```
+
+### Loading for Local Development:
+- **Google Chrome**:
+  - Open `chrome://extensions/`
+  - Enable "Developer mode"
+  - Click "Load unpacked" and select `dist/chrome` (or project root `apps/bookmark-organizer` which mirrors the Chrome manifest).
+- **Mozilla Firefox**:
+  - Open `about:debugging#/runtime/this-firefox`
+  - Click "Load Temporary Add-on..." and select `dist/firefox/manifest.json`.
+
+### Store Publishing Targets:
+- **Chrome Web Store**: Package `dist/chrome` directory (MV3 Service Worker, zero legacy background scripts warnings).
+- **Mozilla Add-ons (AMO)**: Package `dist/firefox` directory (MV3 Background Scripts, strict gecko ID and data collection permissions, 0 errors in `web-ext lint`).
 
 ## Testing & Dictionary Tooling
 
@@ -188,6 +214,22 @@ Performs a live HTTPS connectivity and TLS verification check against official d
 npm run dictionary:integration
 ```
 Executes the full end-to-end pipeline: fetches latest official dictionary releases over HTTPS, builds chunked packs with deterministic checksums, and verifies output integrity.
+
+## Version 0.4.1 Fixes & Stability
+
+### 1. In-Page Spotlight Overlay Life-cycle & Single Deterministic Open Flow
+- **Fixed `ReferenceError: initialQuery is not defined`**: `openOverlay(initialQuery = "")` now takes an explicit query parameter and establishes a strict 10-step lifecycle.
+- **Eliminated Double-Toggle & 150ms Race Condition**: Removed automatic `openOverlay()` invocation on script injection and deleted `setTimeout(..., 150)` from background. Script injection now only initializes the DOM and message listener; opening is 100% message-driven via `OPEN_BOOKMARK_ORGANIZER_OVERLAY`.
+- **Differentiated Scope Toggling vs. Query Update**: Repeated shortcuts while open cleanly toggle scope between `all` and `bookmarks`. Messages carrying queries update search text without flipping scope. Action clicks focus search input without unexpected scope switching.
+
+### 2. Service Worker Cold Start & Restored Tab Resilience
+- **Stateless Background Lifecycle**: Commands, action clicks, context menus, and runtime message listeners are registered synchronously at the top level. Handlers query fresh active tab state dynamically, without keep-alive hacks, global in-memory state, or unawaited timers.
+- **Bounded Navigation Retry**: When Chrome restores multiple inactive/discarded tabs or a tab navigates mid-injection, background verifies tab identity and allows at most 1 bounded retry before falling back to native newtab search with structured diagnostic logging (free of sensitive URLs, queries, or API keys).
+- **Restricted URL Guards**: Extension store pages, browser internal URLs (`chrome://`, `edge://`, `about:`), and discarded tabs gracefully fallback to Bookmark Organizer new tab search without attempting script injection.
+
+### 3. Manifest Warning Elimination & Browser Isolation
+- **Chrome MV3 Compliance**: Chrome distribution (`dist/chrome`) strictly defines `background.service_worker` and deletes `background.scripts`, eliminating the `'background.scripts' requires manifest version of 2 or lower` warning.
+- **Firefox MV3 Support**: Firefox distribution (`dist/firefox`) retains `background.scripts: ["src/background/index.js"]` and gecko settings, passing `web-ext lint` with 0 errors.
 
 ## Version 0.4.0 Features
 

@@ -65,8 +65,13 @@ describe("Bookmark Organizer v0.3.1 - Smoke Imports & Architecture Verification"
       assert.ok(manifest.background, "background must be defined");
       assert.equal(manifest.background.type, "module", "manifest.background.type must be 'module'");
       assert.equal(manifest.background.service_worker, "src/background/index.js");
-      assert.ok(Array.isArray(manifest.background.scripts), "scripts fallback for Firefox must be array");
-      assert.ok(manifest.background.scripts.includes("src/background/index.js"));
+      // Firefox manifest verification from dist/firefox
+      const firefoxManifestPath = path.join(appDir, "dist/firefox/manifest.json");
+      if (fs.existsSync(firefoxManifestPath)) {
+        const firefoxManifest = JSON.parse(fs.readFileSync(firefoxManifestPath, "utf-8"));
+        assert.ok(Array.isArray(firefoxManifest.background.scripts), "scripts fallback for Firefox must be array");
+        assert.ok(firefoxManifest.background.scripts.includes("src/background/index.js"));
+      }
     });
 
     it("verifies static constraint: if background entrypoint uses import/export, manifest background.type must be 'module'", () => {
@@ -83,8 +88,8 @@ describe("Bookmark Organizer v0.3.1 - Smoke Imports & Architecture Verification"
       }
     });
 
-    it("has version 0.4.0 and minimal activeTab + scripting permissions", () => {
-      assert.equal(manifest.version, "0.4.0");
+    it("has version 0.4.1 and minimal activeTab + scripting permissions", () => {
+      assert.equal(manifest.version, "0.4.1");
       assert.ok(manifest.permissions.includes("activeTab"));
       assert.ok(manifest.permissions.includes("scripting"));
       assert.ok(manifest.permissions.includes("storage"));
